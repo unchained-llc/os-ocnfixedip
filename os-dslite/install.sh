@@ -36,7 +36,7 @@ else
 fi
 
 echo "Extracting..."
-tar -xzf "${TMP_DIR}/plugin.tar.gz" -C "${TMP_DIR}" --strip-components=3 '*/os-dslite/src'
+tar -xzf "${TMP_DIR}/plugin.tar.gz" -C "${TMP_DIR}" --strip-components=3
 
 echo "Installing plugin files..."
 SRC="${TMP_DIR}"
