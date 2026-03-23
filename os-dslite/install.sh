@@ -74,6 +74,13 @@ cp "${SRC}/opnsense/mvc/app/views/OPNsense/DSLite/general.volt" \
 cp "${SRC}/opnsense/mvc/app/views/OPNsense/DSLite/diagnostics.volt" \
    /usr/local/opnsense/mvc/app/views/OPNsense/DSLite/
 
+# Dashboard widget
+mkdir -p /usr/local/opnsense/www/js/widgets/Metadata
+cp "${SRC}/opnsense/www/js/widgets/DSLite.js" \
+   /usr/local/opnsense/www/js/widgets/
+cp "${SRC}/opnsense/www/js/widgets/Metadata/DSLite.xml" \
+   /usr/local/opnsense/www/js/widgets/Metadata/
+
 # Backend scripts
 mkdir -p /usr/local/opnsense/scripts/OPNsense/dslite
 cp "${SRC}/opnsense/scripts/OPNsense/dslite/"*.sh \

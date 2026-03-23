@@ -48,6 +48,14 @@ scp -q "${SRC_DIR}/opnsense/mvc/app/views/OPNsense/DSLite/general.volt" \
 scp -q "${SRC_DIR}/opnsense/mvc/app/views/OPNsense/DSLite/diagnostics.volt" \
     "${OPNSENSE_USER}@${OPNSENSE_HOST}:/usr/local/opnsense/mvc/app/views/OPNsense/DSLite/"
 
+# Dashboard widget
+echo "  -> Dashboard widget..."
+scp -q "${SRC_DIR}/opnsense/www/js/widgets/DSLite.js" \
+    "${OPNSENSE_USER}@${OPNSENSE_HOST}:/usr/local/opnsense/www/js/widgets/"
+ssh "${OPNSENSE_USER}@${OPNSENSE_HOST}" "mkdir -p /usr/local/opnsense/www/js/widgets/Metadata"
+scp -q "${SRC_DIR}/opnsense/www/js/widgets/Metadata/DSLite.xml" \
+    "${OPNSENSE_USER}@${OPNSENSE_HOST}:/usr/local/opnsense/www/js/widgets/Metadata/"
+
 # Backend scripts
 echo "  -> Backend scripts..."
 scp -q "${SRC_DIR}/opnsense/scripts/OPNsense/dslite/"*.sh \

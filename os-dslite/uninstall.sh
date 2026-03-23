@@ -19,6 +19,8 @@ rm -rf /usr/local/opnsense/mvc/app/views/OPNsense/DSLite
 rm -rf /usr/local/opnsense/scripts/OPNsense/dslite
 rm -f /usr/local/opnsense/service/conf/actions.d/actions_dslite.conf
 rm -f /usr/local/etc/inc/plugins.inc.d/dslite.inc
+rm -f /usr/local/opnsense/www/js/widgets/DSLite.js
+rm -f /usr/local/opnsense/www/js/widgets/Metadata/DSLite.xml
 
 # Cleanup tunnel
 ifconfig gif0 destroy 2>/dev/null || true
