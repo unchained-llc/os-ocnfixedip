@@ -18,13 +18,13 @@ The plugin can auto-detect your AFTR address from your delegated IPv6 prefix.
 ### One-line install (on OPNsense)
 
 ```sh
-fetch -o /tmp/install-dslite.sh https://raw.githubusercontent.com/YOU/dslite/main/os-dslite/install.sh && sh /tmp/install-dslite.sh
+fetch -o /tmp/install-dslite.sh https://raw.githubusercontent.com/kawaii-not-kawaii/ds-lite-opnsense/main/os-dslite/install.sh && sh /tmp/install-dslite.sh
 ```
 
 ### Manual install (from remote machine with SSH access)
 
 ```sh
-git clone https://github.com/YOU/dslite.git
+git clone https://github.com/kawaii-not-kawaii/ds-lite-opnsense.git
 cd dslite/os-dslite
 ./deploy.sh <opnsense-ip>
 ```

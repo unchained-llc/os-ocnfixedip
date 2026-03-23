@@ -7,7 +7,7 @@
 
 set -e
 
-PLUGIN_URL="https://github.com/YOU/dslite/archive/refs/heads/main.tar.gz"
+PLUGIN_URL="https://github.com/kawaii-not-kawaii/ds-lite-opnsense/archive/refs/heads/main.tar.gz"
 TMP_DIR="/tmp/dslite-install"
 
 echo "=== OPNsense DS-Lite Plugin Installer ==="
