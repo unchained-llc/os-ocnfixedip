@@ -11,21 +11,28 @@ OPNsense plugin for Japanese ISP DS-Lite (Dual-Stack Lite) IPv4-in-IPv6 tunnelin
 | v6 Connect (NTT Smart Connect) | 2404:8e00::feed:100 | Yes |
 | Custom | Manual entry | - |
 
-The plugin can auto-detect your AFTR address from your delegated IPv6 prefix.
+The plugin auto-detects your AFTR address from your delegated IPv6 prefix.
+
+### Tested on
+
+- **Asahi Net** (asahi-net.jp) + NTT West Flets Hikari Cross (10G plan)
+- OPNsense 25.1 (FreeBSD 14.2)
 
 ## Installation
 
-### One-line install (on OPNsense)
+### On OPNsense (IPv6-only safe)
+
+Since DS-Lite users may only have IPv6 connectivity before the tunnel is up, the install command uses GitHub's IPv6-accessible CDN:
 
 ```sh
-fetch -o /tmp/install-dslite.sh https://raw.githubusercontent.com/kawaii-not-kawaii/ds-lite-opnsense/main/os-dslite/install.sh && sh /tmp/install-dslite.sh
+fetch --no-verify-hostname --no-verify-peer -o /tmp/install-dslite.sh "https://raw.githubusercontent.com/kawaii-not-kawaii/ds-lite-opnsense/main/os-dslite/install.sh" && sh /tmp/install-dslite.sh
 ```
 
-### Manual install (from remote machine with SSH access)
+### Remote install via SSH (from another machine)
 
 ```sh
 git clone https://github.com/kawaii-not-kawaii/ds-lite-opnsense.git
-cd dslite/os-dslite
+cd ds-lite-opnsense/os-dslite
 ./deploy.sh <opnsense-ip>
 ```
 
@@ -39,7 +46,17 @@ Before enabling DS-Lite, configure your OPNsense interfaces:
 
 2. **LAN interface**
    - IPv6 Configuration Type: **DHCPv6**
-   - Prefix delegation size: **56**
+   - Prefix delegation size: match your plan (see table below)
+
+### NTT Prefix Delegation by Plan
+
+| Plan | Typical PD Size | Notes |
+|------|----------------|-------|
+| Hikari Cross (10G) | /56 | Guaranteed PD, IPoE only |
+| Flets Hikari Next (1G) | /56 or /64 | PD available with current firmware |
+| Legacy 1G (no Hikari Denwa) | /64 | May require manual prefix config |
+
+Set the **Prefix delegation size** in OPNsense LAN settings to match what your ISP provides (56 for /56, 64 for /64).
 
 ## Usage
 
@@ -69,8 +86,7 @@ The plugin:
 ## Uninstall
 
 ```sh
-# On OPNsense:
-fetch -o /tmp/uninstall-dslite.sh https://raw.githubusercontent.com/YOU/dslite/main/os-dslite/uninstall.sh && sh /tmp/uninstall-dslite.sh
+fetch --no-verify-hostname --no-verify-peer -o /tmp/uninstall-dslite.sh "https://raw.githubusercontent.com/kawaii-not-kawaii/ds-lite-opnsense/main/os-dslite/uninstall.sh" && sh /tmp/uninstall-dslite.sh
 ```
 
 ## Compatibility

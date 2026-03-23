@@ -1,9 +1,9 @@
 #!/bin/sh
 
 # OPNsense DS-Lite Plugin Installer
+# Works over IPv6-only connections (for pre-tunnel install)
 # Run this directly on the OPNsense box:
-#   fetch -o /tmp/install-dslite.sh https://raw.githubusercontent.com/YOU/dslite/main/os-dslite/install.sh
-#   sh /tmp/install-dslite.sh
+#   fetch --no-verify-hostname --no-verify-peer -o /tmp/install-dslite.sh "https://raw.githubusercontent.com/kawaii-not-kawaii/ds-lite-opnsense/main/os-dslite/install.sh" && sh /tmp/install-dslite.sh
 
 set -e
 
@@ -24,10 +24,12 @@ rm -rf "${TMP_DIR}"
 mkdir -p "${TMP_DIR}"
 
 # Try fetch (FreeBSD) then curl
+# Use --no-verify-hostname/peer for IPv6-only environments where
+# certificate validation may fail without proper DNS/IPv4
 if command -v fetch >/dev/null 2>&1; then
-    fetch -o "${TMP_DIR}/plugin.tar.gz" "${PLUGIN_URL}" 2>/dev/null
+    fetch --no-verify-hostname --no-verify-peer -o "${TMP_DIR}/plugin.tar.gz" "${PLUGIN_URL}"
 elif command -v curl >/dev/null 2>&1; then
-    curl -sL -o "${TMP_DIR}/plugin.tar.gz" "${PLUGIN_URL}"
+    curl -skL -o "${TMP_DIR}/plugin.tar.gz" "${PLUGIN_URL}"
 else
     echo "ERROR: No download tool available (fetch or curl required)"
     exit 1
