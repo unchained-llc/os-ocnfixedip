@@ -1,15 +1,21 @@
 <form>
     <field>
         <id>dslite.enabled</id>
-        <label>Enable DS-Lite</label>
+        <label>Enable</label>
         <type>checkbox</type>
-        <help>Enable the DS-Lite (Dual-Stack Lite) IPv4-in-IPv6 tunnel.</help>
+        <help>Enable the DS-Lite / Fixed IP IPv4-in-IPv6 tunnel.</help>
+    </field>
+    <field>
+        <id>dslite.mode</id>
+        <label>Mode</label>
+        <type>dropdown</type>
+        <help>DS-Lite uses shared IPv4 via CG-NAT. Fixed IP uses a dedicated public IPv4 address (requires ISP subscription).</help>
     </field>
     <field>
         <id>dslite.isp_profile</id>
         <label>ISP Profile</label>
         <type>dropdown</type>
-        <help>Select your ISP service. This sets the correct AFTR address automatically.</help>
+        <help>Select your ISP service. This sets the correct AFTR address automatically. Only used in DS-Lite mode.</help>
     </field>
     <field>
         <id>dslite.wan_interface</id>
@@ -61,7 +67,43 @@
         <id>dslite.nat_enabled</id>
         <label>Enable NAT</label>
         <type>checkbox</type>
-        <help>Enable IPv4 NAT (masquerade) on the tunnel interface. Required for most setups.</help>
+        <help>Enable IPv4 NAT (masquerade) on the tunnel interface. Required for DS-Lite, optional for Fixed IP.</help>
         <advanced>true</advanced>
+    </field>
+    <field>
+        <id>dslite.fixedip_interface_id</id>
+        <label>Interface ID (IPv6)</label>
+        <type>text</type>
+        <help>Your assigned Interface ID in full IPv6 format. Used as the tunnel source address. (Fixed IP mode only)</help>
+    </field>
+    <field>
+        <id>dslite.fixedip_aftr</id>
+        <label>AFTR Endpoint (IPv6)</label>
+        <type>text</type>
+        <help>Your assigned AFTR endpoint IPv6 address. (Fixed IP mode only)</help>
+    </field>
+    <field>
+        <id>dslite.fixedip_v4</id>
+        <label>Fixed IPv4 Address</label>
+        <type>text</type>
+        <help>Your assigned fixed public IPv4 address. (Fixed IP mode only)</help>
+    </field>
+    <field>
+        <id>dslite.fixedip_update_url</id>
+        <label>Prefix Update URL</label>
+        <type>text</type>
+        <help>URL for periodic prefix updates (e.g., https://v6update.asahi-net.or.jp/prefix). (Fixed IP mode only)</help>
+    </field>
+    <field>
+        <id>dslite.fixedip_auth_user</id>
+        <label>Auth User ID</label>
+        <type>text</type>
+        <help>Authentication user ID for prefix updates. (Fixed IP mode only)</help>
+    </field>
+    <field>
+        <id>dslite.fixedip_auth_pass</id>
+        <label>Auth Password</label>
+        <type>password</type>
+        <help>Authentication password for prefix updates. (Fixed IP mode only)</help>
     </field>
 </form>

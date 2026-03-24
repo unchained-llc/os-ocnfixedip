@@ -20,45 +20,58 @@
 <script>
     // ISP profile AFTR defaults
     var ispProfiles = {
-        'auto': {
-            'hostname': '',
-            'address': '',
-            'readonly': true
-        },
-        'transix': {
-            'hostname': 'gw.transix.jp',
-            'address': '2001:c28:5:301::11',
-            'readonly': true
-        },
-        'xpass': {
-            'hostname': '',
-            'address': '2001:f60:0:200::1',
-            'readonly': true
-        },
-        'v6connect': {
-            'hostname': '',
-            'address': '2404:8e00::feed:100',
-            'readonly': true
-        },
-        'custom': {
-            'hostname': '',
-            'address': '',
-            'readonly': false
-        }
+        'auto': { 'hostname': '', 'address': '', 'readonly': true },
+        'transix': { 'hostname': 'gw.transix.jp', 'address': '2001:c28:5:301::11', 'readonly': true },
+        'xpass': { 'hostname': '', 'address': '2001:f60:0:200::1', 'readonly': true },
+        'v6connect': { 'hostname': '', 'address': '2404:8e00::feed:100', 'readonly': true },
+        'custom': { 'hostname': '', 'address': '', 'readonly': false }
     };
+
+    // Fields that belong to each mode
+    var dsliteFields = ['dslite\\.isp_profile', 'dslite\\.aftr_hostname', 'dslite\\.aftr_address'];
+    var fixedipFields = ['dslite\\.fixedip_interface_id', 'dslite\\.fixedip_aftr', 'dslite\\.fixedip_v4',
+                         'dslite\\.fixedip_update_url', 'dslite\\.fixedip_auth_user', 'dslite\\.fixedip_auth_pass'];
 
     $( document ).ready(function() {
         var data_get_map = {'frm_general_settings':"/api/dslite/settings/get"};
         mapDataToFormUI(data_get_map).done(function(data){
             formatTokenizersUI();
             $('.selectpicker').selectpicker('refresh');
+            updateModeFields();
             updateProfileFields();
+        });
+
+        // Toggle fields based on mode
+        $('#dslite\\.mode').on('changed.bs.select', function() {
+            updateModeFields();
         });
 
         // Update AFTR fields when ISP profile changes
         $('#dslite\\.isp_profile').on('changed.bs.select', function() {
             updateProfileFields();
         });
+
+        function updateModeFields() {
+            var mode = $('#dslite\\.mode').val();
+            if (mode === 'fixedip') {
+                // Show fixed IP fields, hide DS-Lite profile fields
+                dsliteFields.forEach(function(f) {
+                    $('#' + f).closest('tr').hide();
+                });
+                fixedipFields.forEach(function(f) {
+                    $('#' + f).closest('tr').show();
+                });
+            } else {
+                // Show DS-Lite fields, hide fixed IP fields
+                dsliteFields.forEach(function(f) {
+                    $('#' + f).closest('tr').show();
+                });
+                fixedipFields.forEach(function(f) {
+                    $('#' + f).closest('tr').hide();
+                });
+                updateProfileFields();
+            }
+        }
 
         function updateProfileFields() {
             var profile = $('#dslite\\.isp_profile').val();
@@ -109,7 +122,6 @@
             onAction: function(data, status) {
                 ajaxCall("/api/dslite/service/reconfigure", {}, function(data, status) {
                     updateServiceControlUI('dslite');
-                    // Refresh status after a short delay to let tunnel come up
                     setTimeout(refreshStatus, 2000);
                     setTimeout(refreshStatus, 5000);
                 });
@@ -122,7 +134,6 @@
                 if (data && data.tunnel) {
                     var t = data.tunnel;
 
-                    // Status badge
                     if (t.status === 'up' && t.connectivity === 'connected') {
                         setStatus('Connected', 'fa-check-circle text-success', 'label-success');
                     } else if (t.status === 'up' && t.connectivity === 'no internet') {
@@ -137,7 +148,6 @@
                         setStatus(t.status, 'fa-question-circle text-muted', 'label-default');
                     }
 
-                    // Connectivity
                     if (t.connectivity === 'connected') {
                         $('#tunnel_connectivity').html('<span class="text-success">OK</span>');
                     } else if (t.connectivity === 'no internet') {
@@ -151,7 +161,6 @@
                     $('#tunnel_ipv4').text(t.ipv4 || '-');
                     $('#tunnel_mtu').text(t.mtu || '-');
 
-                    // Reason (shown when not running)
                     if (t.reason) {
                         $('#tunnel_reason').text(t.reason);
                         $('#tunnel_reason').parent().show();
@@ -171,7 +180,7 @@
 
 <div class="content-box" style="padding: 10px;">
     <div class="content-box-header">
-        <h3>{{ lang._('DS-Lite Tunnel Status') }}</h3>
+        <h3>{{ lang._('Tunnel Status') }}</h3>
     </div>
     <div class="content-box-main">
         <table class="table table-condensed">
@@ -216,7 +225,7 @@
         <button class="btn btn-primary" id="saveAct"
                 data-endpoint='/api/dslite/service/reconfigure'
                 data-label="{{ lang._('Apply') }}"
-                data-error-title="{{ lang._('Error reconfiguring DS-Lite') }}"
+                data-error-title="{{ lang._('Error reconfiguring tunnel') }}"
                 type="button">
         </button>
     </div>
