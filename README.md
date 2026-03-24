@@ -25,7 +25,7 @@ The plugin auto-detects your AFTR address from your delegated IPv6 prefix.
 Since DS-Lite users may only have IPv6 connectivity before the tunnel is up, the install command uses GitHub's IPv6-accessible CDN:
 
 ```sh
-fetch --no-verify-hostname --no-verify-peer -o /tmp/install-dslite.sh "https://raw.githubusercontent.com/kawaii-not-kawaii/ds-lite-opnsense/main/os-dslite/install.sh" && sh /tmp/install-dslite.sh
+curl -6 -skL -o /tmp/install-dslite.sh "https://raw.githubusercontent.com/kawaii-not-kawaii/ds-lite-opnsense/main/os-dslite/install.sh" && sh /tmp/install-dslite.sh
 ```
 
 ### Remote install via SSH (from another machine)
@@ -86,7 +86,7 @@ The plugin:
 ## Uninstall
 
 ```sh
-fetch --no-verify-hostname --no-verify-peer -o /tmp/uninstall-dslite.sh "https://raw.githubusercontent.com/kawaii-not-kawaii/ds-lite-opnsense/main/os-dslite/uninstall.sh" && sh /tmp/uninstall-dslite.sh
+curl -6 -skL -o /tmp/uninstall-dslite.sh "https://raw.githubusercontent.com/kawaii-not-kawaii/ds-lite-opnsense/main/os-dslite/uninstall.sh" && sh /tmp/uninstall-dslite.sh
 ```
 
 ## Compatibility

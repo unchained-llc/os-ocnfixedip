@@ -23,15 +23,14 @@ echo "Downloading plugin..."
 rm -rf "${TMP_DIR}"
 mkdir -p "${TMP_DIR}"
 
-# Try fetch (FreeBSD) then curl
-# Use --no-verify-hostname/peer for IPv6-only environments where
-# certificate validation may fail without proper DNS/IPv4
-if command -v fetch >/dev/null 2>&1; then
+# Prefer curl -6 (forces IPv6, works before DS-Lite tunnel is up)
+# Fall back to fetch if curl unavailable
+if command -v curl >/dev/null 2>&1; then
+    curl -6 -skL -o "${TMP_DIR}/plugin.tar.gz" "${PLUGIN_URL}"
+elif command -v fetch >/dev/null 2>&1; then
     fetch --no-verify-hostname --no-verify-peer -o "${TMP_DIR}/plugin.tar.gz" "${PLUGIN_URL}"
-elif command -v curl >/dev/null 2>&1; then
-    curl -skL -o "${TMP_DIR}/plugin.tar.gz" "${PLUGIN_URL}"
 else
-    echo "ERROR: No download tool available (fetch or curl required)"
+    echo "ERROR: No download tool available (curl or fetch required)"
     exit 1
 fi
 
