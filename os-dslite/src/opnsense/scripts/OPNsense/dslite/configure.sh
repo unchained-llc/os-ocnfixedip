@@ -53,10 +53,15 @@ if [ "${TUNNEL_MODE}" = "fixedip" ]; then
     PD_PREFIX=$(get_pd_prefix)
     if [ -n "${PD_PREFIX}" ] && command -v python3 >/dev/null 2>&1; then
         # Combine prefix + interface ID using python for reliable IPv6 math
+        # The interface ID must be shifted to align with the prefix boundary
+        # For /56 prefix: shift left 8 bits; for /64: no shift; etc.
         LOCAL_V6=$(python3 -c "
 import sys, ipaddress
 prefix = ipaddress.ip_network(sys.argv[1], strict=False)
 iface_id = int(ipaddress.ip_address(sys.argv[2]))
+shift = 64 - prefix.prefixlen
+if shift > 0:
+    iface_id = iface_id << shift
 combined = int(prefix.network_address) | iface_id
 print(str(ipaddress.ip_address(combined)))
 " "${PD_PREFIX}" "${FIXEDIP_INTERFACE_ID}" 2>/dev/null)
