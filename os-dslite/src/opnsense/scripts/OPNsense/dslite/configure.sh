@@ -54,12 +54,12 @@ if [ "${TUNNEL_MODE}" = "fixedip" ]; then
     if [ -n "${PD_PREFIX}" ] && command -v python3 >/dev/null 2>&1; then
         # Combine prefix + interface ID using python for reliable IPv6 math
         LOCAL_V6=$(python3 -c "
-import ipaddress
-prefix = ipaddress.ip_network('${PD_PREFIX}', strict=False)
-iface_id = int(ipaddress.ip_address('${FIXEDIP_INTERFACE_ID}'))
+import sys, ipaddress
+prefix = ipaddress.ip_network(sys.argv[1], strict=False)
+iface_id = int(ipaddress.ip_address(sys.argv[2]))
 combined = int(prefix.network_address) | iface_id
 print(str(ipaddress.ip_address(combined)))
-" 2>/dev/null)
+" "${PD_PREFIX}" "${FIXEDIP_INTERFACE_ID}" 2>/dev/null)
     fi
 
     # Fallback: if no prefix available, use the Interface ID as-is
@@ -111,6 +111,27 @@ else
     fi
 
     if [ -z "${LOCAL_V6}" ]; then
+        # Retry a few times - PD may not be ready at boot
+        for i in 1 2 3 4 5; do
+            logger -t dslite "Waiting for IPv6 prefix delegation (attempt $i/5)..."
+            sleep 5
+            PD_PREFIX=$(get_pd_prefix)
+            if [ -n "${PD_PREFIX}" ]; then
+                BASE_PREFIX=$(echo "${PD_PREFIX}" | sed 's|/.*||; s/::$//')
+                LOCAL_V6="${BASE_PREFIX}::1"
+                WAN_IF=$(config_get "//interfaces/${WAN_INTERFACE}/if")
+                WAN_IF="${WAN_IF:-${WAN_INTERFACE}}"
+                if ! ifconfig "${WAN_IF}" 2>/dev/null | grep -q "${LOCAL_V6}"; then
+                    ifconfig "${WAN_IF}" inet6 "${LOCAL_V6}" prefixlen 128
+                    logger -t dslite "Assigned ${LOCAL_V6} to ${WAN_IF} from PD prefix ${PD_PREFIX}"
+                    sleep 2
+                fi
+                break
+            fi
+        done
+    fi
+
+    if [ -z "${LOCAL_V6}" ]; then
         logger -t dslite "ERROR: No global IPv6 address found on WAN interface (${WAN_INTERFACE})"
         exit 1
     fi
@@ -151,6 +172,9 @@ fi
 
 # Set MTU
 ifconfig "${TUNNEL_IF}" mtu "${MTU}"
+
+# Apply TCP MSS clamping via sysctl (derives MSS from interface MTU)
+sysctl net.inet.tcp.mss_ifmtu=1 >/dev/null 2>&1
 
 # Bring interface up
 ifconfig "${TUNNEL_IF}" up
@@ -215,17 +239,25 @@ fi
 # Set up periodic prefix update cron job for Fixed IP mode
 if [ "${TUNNEL_MODE}" = "fixedip" ] && [ -n "${FIXEDIP_UPDATE_URL}" ] && [ -n "${FIXEDIP_AUTH_USER}" ]; then
     CRON_FILE="/usr/local/opnsense/scripts/OPNsense/dslite/prefix_update.sh"
-    cat > "${CRON_FILE}" << CRONEOF
+    cat > "${CRON_FILE}" << 'CRONEOF'
 #!/bin/sh
-# DS-Lite Fixed IP prefix update
-curl -6 -sk -u "${FIXEDIP_AUTH_USER}:${FIXEDIP_AUTH_PASS}" "${FIXEDIP_UPDATE_URL}" 2>/dev/null
-if [ \$? -eq 0 ]; then
-    logger -t dslite "Periodic prefix update sent"
-else
-    logger -t dslite "WARNING: Periodic prefix update failed"
+# DS-Lite Fixed IP prefix update - reads credentials at runtime
+SCRIPT_DIR=$(dirname "$0")
+. "${SCRIPT_DIR}/lib.sh"
+get_config
+UPDATE_URL=$(config_get "//OPNsense/dslite/fixedip_update_url")
+AUTH_USER=$(config_get "//OPNsense/dslite/fixedip_auth_user")
+AUTH_PASS=$(config_get "//OPNsense/dslite/fixedip_auth_pass")
+if [ -n "${UPDATE_URL}" ] && [ -n "${AUTH_USER}" ]; then
+    NETRC=$(mktemp)
+    chmod 600 "${NETRC}"
+    printf "default\nlogin %s\npassword %s\n" "${AUTH_USER}" "${AUTH_PASS}" > "${NETRC}"
+    RESULT=$(curl -6 -sk --netrc-file "${NETRC}" "${UPDATE_URL}" 2>&1)
+    rm -f "${NETRC}"
+    logger -t dslite "Periodic prefix update: ${RESULT}"
 fi
 CRONEOF
-    chmod +x "${CRON_FILE}"
+    chmod 700 "${CRON_FILE}"
     logger -t dslite "Prefix update script created"
 fi
 

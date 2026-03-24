@@ -42,10 +42,10 @@ ipv6_to_hex() {
     # Fallback to manual expansion if python not available
     if command -v python3 >/dev/null 2>&1; then
         python3 -c "
-import ipaddress
-a = ipaddress.ip_address('${addr}')
+import sys, ipaddress
+a = ipaddress.ip_address(sys.argv[1])
 print(format(int(a), '032x'))
-" 2>/dev/null
+" "${addr}" 2>/dev/null
         return
     fi
     # Manual expansion: replace :: with enough 0s, then expand each group
@@ -252,12 +252,12 @@ get_pd_prefix() {
         head -1 | awk '{print $2}' | sed 's/%.*$//')
     if [ -n "${global_addr}" ] && command -v python3 >/dev/null 2>&1; then
         python3 -c "
-import ipaddress
-addr = ipaddress.ip_address('${global_addr}')
+import sys, ipaddress
+addr = ipaddress.ip_address(sys.argv[1])
 # Extract /56 network prefix
 net = ipaddress.ip_network(str(addr) + '/56', strict=False)
 print(str(net))
-" 2>/dev/null
+" "${global_addr}" 2>/dev/null
         return
     fi
 

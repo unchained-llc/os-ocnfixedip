@@ -6,8 +6,6 @@
 SCRIPT_DIR=$(dirname "$0")
 . "${SCRIPT_DIR}/lib.sh"
 
-TUNNEL_IF="gif0"
-
 # Collect diagnostics
 iface_info=$(ifconfig "${TUNNEL_IF}" 2>&1)
 route_info=$(netstat -rn -f inet 2>&1 | head -20)
@@ -20,8 +18,13 @@ wan_v6_info=$(get_wan_ipv6 2>&1)
 # Connectivity test through tunnel
 ping_info="Not tested"
 if ifconfig "${TUNNEL_IF}" >/dev/null 2>&1; then
-    ping_result=$(ping -c 3 -W 2 -S 192.0.0.2 8.8.8.8 2>&1)
-    ping_info="${ping_result}"
+    tunnel_ipv4=$(ifconfig "${TUNNEL_IF}" 2>/dev/null | grep "inet " | awk '{print $2}')
+    if [ -n "${tunnel_ipv4}" ]; then
+        ping_result=$(ping -c 3 -W 2 -S "${tunnel_ipv4}" 8.8.8.8 2>&1)
+        ping_info="${ping_result}"
+    else
+        ping_info="No IPv4 address on tunnel interface"
+    fi
 fi
 
 # Escape strings for JSON

@@ -24,9 +24,10 @@ rm -f /usr/local/opnsense/www/js/widgets/Metadata/DSLite.xml
 
 # Cleanup tunnel
 ifconfig gif0 destroy 2>/dev/null || true
-route delete default 192.0.0.1 2>/dev/null || true
+route delete default 2>/dev/null || true
+pfctl -a "dslite/nat" -F all 2>/dev/null || true
+pfctl -a "dslite/fw" -F all 2>/dev/null || true
 pfctl -a "dslite" -F all 2>/dev/null || true
-pfctl -a "dslite/scrub" -F all 2>/dev/null || true
 
 # Restart configd
 echo "Restarting configd..."

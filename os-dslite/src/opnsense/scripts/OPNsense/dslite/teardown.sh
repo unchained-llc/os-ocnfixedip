@@ -9,11 +9,12 @@ SCRIPT_DIR=$(dirname "$0")
 logger -t dslite "Tearing down DS-Lite tunnel"
 
 # Remove default route through tunnel
-route delete default 192.0.0.1 2>/dev/null
+route delete default 2>/dev/null
 
 # Flush pf anchor rules
+pfctl -a "dslite/nat" -F all 2>/dev/null
+pfctl -a "dslite/fw" -F all 2>/dev/null
 pfctl -a "dslite" -F all 2>/dev/null
-pfctl -a "dslite/scrub" -F all 2>/dev/null
 
 # Destroy tunnel interface
 if tunnel_exists; then
@@ -25,7 +26,7 @@ else
 fi
 
 # Cleanup temp files
-rm -f /tmp/dslite_nat.conf /tmp/dslite_scrub.conf
+rm -f /tmp/dslite_nat.conf /tmp/dslite_fw.conf
 
 logger -t dslite "DS-Lite teardown complete"
 exit 0

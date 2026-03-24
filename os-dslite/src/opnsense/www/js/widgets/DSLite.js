@@ -23,6 +23,10 @@ export default class DSLite extends BaseTableWidget {
         super();
     }
 
+    _esc(str) {
+        return $('<span>').text(str).html();
+    }
+
     getGridOptions() {
         return {
             sizeToContent: 350
@@ -92,15 +96,15 @@ export default class DSLite extends BaseTableWidget {
         if (t.status === 'up') {
             detailsRow = `
                 <div style="padding: 4px 0;">
-                    <div><small><b>${this.translations.localv6}:</b> ${t.local_v6 || '-'}</small></div>
-                    <div><small><b>${this.translations.aftr}:</b> ${t.aftr || '-'}</small></div>
-                    <div><small><b>${this.translations.ipv4}:</b> ${t.ipv4 || '-'}</small></div>
-                    <div><small><b>${this.translations.mtu}:</b> ${t.mtu || '-'}</small></div>
+                    <div><small><b>${this.translations.localv6}:</b> ${this._esc(t.local_v6 || '-')}</small></div>
+                    <div><small><b>${this.translations.aftr}:</b> ${this._esc(t.aftr || '-')}</small></div>
+                    <div><small><b>${this.translations.ipv4}:</b> ${this._esc(t.ipv4 || '-')}</small></div>
+                    <div><small><b>${this.translations.mtu}:</b> ${this._esc(t.mtu || '-')}</small></div>
                 </div>`;
         } else if (t.reason) {
             detailsRow = `
                 <div style="padding: 4px 0;">
-                    <small class="text-muted">${t.reason}</small>
+                    <small class="text-muted">${this._esc(t.reason)}</small>
                 </div>`;
         }
 
