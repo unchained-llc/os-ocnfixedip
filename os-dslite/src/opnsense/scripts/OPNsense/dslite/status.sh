@@ -18,9 +18,10 @@ if tunnel_exists; then
     mtu_val=$(echo "${ifdata}" | grep "mtu" | head -1 | sed 's/.*mtu //' | awk '{print $1}')
 
     # Quick connectivity test (1 packet, 2s timeout)
+    # Use the tunnel's assigned IPv4 as source (works for both DS-Lite and Fixed IP)
     connectivity="untested"
-    if [ "${status}" = "up" ]; then
-        if ping -c 1 -W 2 -S 192.0.0.2 8.8.8.8 >/dev/null 2>&1; then
+    if [ "${status}" = "up" ] && [ -n "${ipv4}" ]; then
+        if ping -c 1 -W 2 -S "${ipv4}" 8.8.8.8 >/dev/null 2>&1; then
             connectivity="connected"
         else
             connectivity="no internet"
