@@ -102,37 +102,37 @@ fi
 
 logger -t dslite "Default IPv4 route set via ${AFTR_V4_ADDRESS}"
 
-# Configure NAT (pf masquerade) on tunnel interface
+# Configure NAT and firewall rules via OPNsense's registered anchors
 if [ "${NAT_ENABLED}" = "1" ]; then
-    # Create pf anchor for DS-Lite NAT rules
-    ANCHOR_FILE="/tmp/dslite_nat.conf"
-
-    cat > "${ANCHOR_FILE}" << EOF
-# DS-Lite NAT rules - auto-generated
+    NAT_FILE="/tmp/dslite_nat.conf"
+    cat > "${NAT_FILE}" << EOF
 nat on ${TUNNEL_IF} from any to any -> (${TUNNEL_IF})
 EOF
 
-    # Load the anchor
-    pfctl -a "dslite" -f "${ANCHOR_FILE}" 2>/dev/null
+    FW_FILE="/tmp/dslite_fw.conf"
+    cat > "${FW_FILE}" << EOF
+pass out quick on ${TUNNEL_IF} all keep state
+pass in quick on ${TUNNEL_IF} all keep state
+EOF
+
+    # Load into OPNsense's registered anchors
+    pfctl -a "dslite/nat" -f "${NAT_FILE}" 2>/dev/null
     if [ $? -eq 0 ]; then
         logger -t dslite "NAT rules loaded for ${TUNNEL_IF}"
     else
-        logger -t dslite "WARNING: Failed to load NAT rules"
+        logger -t dslite "WARNING: Failed to load NAT anchor, trying direct load"
+        # Fallback: reload entire filter to pick up anchor registration
+        configctl filter reload 2>/dev/null
+        sleep 1
+        pfctl -a "dslite/nat" -f "${NAT_FILE}" 2>/dev/null
     fi
-fi
 
-# Configure TCP MSS clamping
-SCRUB_FILE="/tmp/dslite_scrub.conf"
-cat > "${SCRUB_FILE}" << EOF
-# DS-Lite MSS clamp - auto-generated
-scrub on ${TUNNEL_IF} max-mss ${MSS_CLAMP}
-EOF
-
-pfctl -a "dslite/scrub" -f "${SCRUB_FILE}" 2>/dev/null
-if [ $? -eq 0 ]; then
-    logger -t dslite "MSS clamping set to ${MSS_CLAMP} on ${TUNNEL_IF}"
-else
-    logger -t dslite "WARNING: Failed to set MSS clamping"
+    pfctl -a "dslite/fw" -f "${FW_FILE}" 2>/dev/null
+    if [ $? -eq 0 ]; then
+        logger -t dslite "Firewall and MSS rules loaded for ${TUNNEL_IF}"
+    else
+        logger -t dslite "WARNING: Failed to load firewall anchor"
+    fi
 fi
 
 logger -t dslite "DS-Lite tunnel configuration complete"

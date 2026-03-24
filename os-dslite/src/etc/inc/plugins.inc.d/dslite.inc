@@ -44,6 +44,17 @@ function dslite_configure_do($verbose = false)
     service_log("done.\n", $verbose);
 }
 
+function dslite_firewall(\OPNsense\Firewall\Plugin $fw)
+{
+    if (!dslite_enabled()) {
+        return;
+    }
+
+    $fw->registerAnchor('dslite/*', 'nat');
+    $fw->registerAnchor('dslite/*', 'rdr');
+    $fw->registerAnchor('dslite/*', 'fw');
+}
+
 function dslite_services()
 {
     $services = [];
