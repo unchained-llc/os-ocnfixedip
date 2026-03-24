@@ -39,34 +39,47 @@ if [ "${TUNNEL_MODE}" = "fixedip" ]; then
         exit 1
     fi
 
-    # Use the Interface ID as the local tunnel source
-    LOCAL_V6="${FIXEDIP_INTERFACE_ID}"
     AFTR_ADDRESS="${FIXEDIP_AFTR}"
-
-    # For fixed IP, the tunnel IPv4 is the fixed public address
-    # The remote side is a point-to-point, we use the fixed IP as our address
     B4_ADDRESS="${FIXEDIP_V4}"
-    # AFTR v4 side - use a /32 point-to-point (no peer address needed for IPIP)
     AFTR_V4_ADDRESS=""
 
-    # Assign the Interface ID to the WAN interface if not present
+    # The Interface ID needs to be combined with the PD prefix to form
+    # a full routable IPv6 address for the tunnel source.
+    # Asahi Net provides the Interface ID as the host portion.
     WAN_IF=$(config_get "//interfaces/${WAN_INTERFACE}/if")
     WAN_IF="${WAN_IF:-${WAN_INTERFACE}}"
+
+    # Get the PD prefix to combine with Interface ID
+    PD_PREFIX=$(get_pd_prefix)
+    if [ -n "${PD_PREFIX}" ] && command -v python3 >/dev/null 2>&1; then
+        # Combine prefix + interface ID using python for reliable IPv6 math
+        LOCAL_V6=$(python3 -c "
+import ipaddress
+prefix = ipaddress.ip_network('${PD_PREFIX}', strict=False)
+iface_id = int(ipaddress.ip_address('${FIXEDIP_INTERFACE_ID}'))
+combined = int(prefix.network_address) | iface_id
+print(str(ipaddress.ip_address(combined)))
+" 2>/dev/null)
+    fi
+
+    # Fallback: if no prefix available, use the Interface ID as-is
+    # (user may have entered a full address)
+    if [ -z "${LOCAL_V6}" ]; then
+        LOCAL_V6="${FIXEDIP_INTERFACE_ID}"
+    fi
+
+    # Assign the combined address to the WAN interface if not present
     if ! ifconfig "${WAN_IF}" 2>/dev/null | grep -q "${LOCAL_V6}"; then
         ifconfig "${WAN_IF}" inet6 "${LOCAL_V6}" prefixlen 128
-        logger -t dslite "Assigned Interface ID ${LOCAL_V6} to ${WAN_IF}"
+        logger -t dslite "Assigned ${LOCAL_V6} to ${WAN_IF}"
         sleep 2
     fi
 
     # Run prefix update if configured
     if [ -n "${FIXEDIP_UPDATE_URL}" ] && [ -n "${FIXEDIP_AUTH_USER}" ]; then
         logger -t dslite "Sending prefix update to ${FIXEDIP_UPDATE_URL}"
-        curl -6 -sk -u "${FIXEDIP_AUTH_USER}:${FIXEDIP_AUTH_PASS}" "${FIXEDIP_UPDATE_URL}" 2>/dev/null
-        if [ $? -eq 0 ]; then
-            logger -t dslite "Prefix update sent successfully"
-        else
-            logger -t dslite "WARNING: Prefix update failed (tunnel may still work)"
-        fi
+        UPDATE_RESULT=$(curl -6 -sk -u "${FIXEDIP_AUTH_USER}:${FIXEDIP_AUTH_PASS}" "${FIXEDIP_UPDATE_URL}" 2>&1)
+        logger -t dslite "Prefix update response: ${UPDATE_RESULT}"
     fi
 
     logger -t dslite "Fixed IP mode: local=${LOCAL_V6} aftr=${AFTR_ADDRESS} ipv4=${B4_ADDRESS}"
@@ -128,8 +141,8 @@ fi
 
 # Configure IPv4 addresses on tunnel
 if [ "${TUNNEL_MODE}" = "fixedip" ]; then
-    # Fixed IP: assign the public IPv4 directly to the tunnel interface
-    ifconfig "${TUNNEL_IF}" inet "${B4_ADDRESS}" netmask 255.255.255.255
+    # Fixed IP: assign the public IPv4 as point-to-point on tunnel interface
+    ifconfig "${TUNNEL_IF}" inet "${B4_ADDRESS}" "${B4_ADDRESS}" netmask 255.255.255.255
     logger -t dslite "Fixed IP ${B4_ADDRESS} assigned to ${TUNNEL_IF}"
 else
     # DS-Lite: standard B4/AFTR point-to-point (RFC 6333)
