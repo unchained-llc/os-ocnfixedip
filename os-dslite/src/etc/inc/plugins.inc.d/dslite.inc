@@ -25,6 +25,25 @@ function dslite_enabled()
     return (string)$model->enabled == '1';
 }
 
+function dslite_configure()
+{
+    return [
+        'newwanip' => ['dslite_configure_do:3'],
+        'vpn' => ['dslite_configure_do:2'],
+    ];
+}
+
+function dslite_configure_do($verbose = false)
+{
+    if (!dslite_enabled()) {
+        return;
+    }
+
+    service_log('Configuring DS-Lite tunnel...', $verbose);
+    configd_run('dslite configure');
+    service_log("done.\n", $verbose);
+}
+
 function dslite_services()
 {
     $services = [];
