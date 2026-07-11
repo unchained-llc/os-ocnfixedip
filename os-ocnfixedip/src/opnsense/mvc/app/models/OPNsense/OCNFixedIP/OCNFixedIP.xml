@@ -1,6 +1,6 @@
 <model>
     <mount>//OPNsense/ocnfixedip</mount>
-    <description>OCN Virtual Connect Fixed IP (IPv4 over IPv6 IPIP) tunnel configuration</description>
+    <description>OCN Fixed IP (IPoE) (IPv4 over IPv6 IPIP) tunnel configuration</description>
     <version>2.0.0</version>
     <items>
         <enabled type="BooleanField">

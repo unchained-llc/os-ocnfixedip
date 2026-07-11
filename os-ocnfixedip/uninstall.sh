@@ -1,20 +1,18 @@
 #!/bin/sh
 
-# OPNsense OCN Virtual Connect Fixed IP Plugin Uninstaller
+# OPNsense OCN Fixed IP (IPoE) Plugin Uninstaller
 
 set -e
 
-echo "=== OPNsense OCN Virtual Connect Fixed IP Plugin Uninstaller ==="
+echo "=== OPNsense OCN Fixed IP (IPoE) Plugin Uninstaller ==="
 echo ""
 
 # Stop tunnel if running
-echo "Stopping OCN Virtual Connect Fixed IP tunnel..."
+echo "Stopping OCN Fixed IP (IPoE) tunnel..."
 configctl ocnfixedip stop 2>/dev/null || true
 
 # Remove files
 echo "Removing plugin files..."
-# Remove prefix update cron entry if present
-(crontab -l 2>/dev/null | sed '/ocnfixedip-prefix-update/d;/OPNsense\/ocnfixedip\/prefix_update\.sh/d') | crontab - || true
 rm -rf /usr/local/opnsense/mvc/app/models/OPNsense/OCNFixedIP
 rm -rf /usr/local/opnsense/mvc/app/controllers/OPNsense/OCNFixedIP
 rm -rf /usr/local/opnsense/mvc/app/views/OPNsense/OCNFixedIP
@@ -28,6 +26,8 @@ rm -f /usr/local/opnsense/www/js/widgets/Metadata/OCNFixedIP.xml
 ifconfig gif0 destroy 2>/dev/null || true
 # Do not blindly delete system default route on uninstall
 
+opnsense-patch
+
 # Restart configd
 echo "Restarting configd..."
 service configd restart
@@ -39,5 +39,5 @@ rm -f /tmp/ocnfixedip_*.conf 2>/dev/null
 echo ""
 echo "=== Uninstall complete ==="
 echo "Log out and back into the web UI for menu changes to take effect."
-echo "Note: OCN Virtual Connect Fixed IP config in /conf/config.xml was not removed."
+echo "Note: OCN Fixed IP (IPoE) config in /conf/config.xml was not removed."
 echo ""

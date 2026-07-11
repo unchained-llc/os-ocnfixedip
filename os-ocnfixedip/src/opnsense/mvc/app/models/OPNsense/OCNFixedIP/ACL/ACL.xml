@@ -1,6 +1,6 @@
 <acl>
     <page-ocnfixedip-config>
-        <name>Interfaces: OCN Virtual Connect Fixed IP</name>
+        <name>Interfaces: OCN Fixed IP (IPoE)</name>
         <patterns>
             <pattern>ui/ocnfixedip/*</pattern>
             <pattern>api/ocnfixedip/settings/*</pattern>

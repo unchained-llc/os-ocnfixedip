@@ -1,181 +1,199 @@
-# OPNsense DS-Lite / Fixed IP Plugin
+# OCN Fixed IP (IPoE) Plugin for OPNsense
 
-OPNsense plugin for Japanese ISP IPv4-over-IPv6 tunneling. Supports both **DS-Lite** (shared IPv4 / CG-NAT) and **Fixed IP** (dedicated public IPv4 via IPIP) with **HB46PP auto-provisioning**.
+This is an OPNsense plugin dedicated to **OCN Fixed IP (IPoE)** (IPv4 over IPv6 / IPIP).
+It is focused on OCN fixed IP operation only.
 
-## Features
+---
 
-- **HB46PP Auto-Provisioning** — just enter your ISP credentials, everything else is automatic
-- **Fixed IP (IPIP)** — dedicated public IPv4 with inbound port forwarding
-- **DS-Lite** — shared IPv4 via CG-NAT, auto-detected from prefix
-- **Dashboard widget** — real-time tunnel status on the OPNsense lobby
-- **Auto-start on boot** — tunnel comes up automatically after reboot
-- **IPv6-only install** — works before the tunnel is up
+## Overview
 
-## Branches
+This plugin configures a `gif0` (IPv4-in-IPv6) tunnel on OPNsense and automates OCN fixed-IP routing and prefix update handling.
 
-| Branch | Description |
-|--------|-------------|
-| `main` | Stable DS-Lite + manual Fixed IP |
-| `hb46pp` | **Experimental** — HB46PP auto-provisioning for both modes |
+Main behavior:
 
-## Supported ISPs / VNEs
+- Builds an OCN fixed-IP IPIP tunnel on `gif0`
+- Uses a fixed `Tunnel Peer IPv4` value: `192.0.0.1`
+- Auto-calculates `Local Tunnel IPv6`
+  - Uses WAN global IPv6 `/64`
+  - Builds interface ID from the fixed IPv4 range start
+- Runs Prefix Update (OCN API)
+  - On startup / apply / WAN IPv6 renewal
+- Reconfigures through `rc.newwanipv6` flow (runs only on `inet6` trigger)
+- Retries WAN global IPv6 detection briefly to avoid DHCPv6 renewal timing races
+- Cleans up previously managed WAN `/128` tunnel alias when prefix changes
+- Uses temporary `netrc` file for prefix update authentication (avoids exposing credentials in process args)
 
-| VNE Service | DS-Lite | Fixed IP (IPIP) | HB46PP Auto |
-|-------------|---------|-----------------|-------------|
-| v6 Connect (Asahi Net) | Yes | Yes | Yes |
-| Transix (Internet Multifeed) | Yes | - | Untested |
-| Xpass (ARTERIA Networks) | Yes | - | Untested |
-| BIGLOBE IPv6 (IPIP) | - | Yes | Untested |
-| OCX Hikari Internet | - | Yes | Untested |
+---
 
-Any ISP using the [HB46PP standard provisioning protocol](https://github.com/v6pc/v6mig-prov/blob/master/spec.md) should work automatically.
+## Scope
 
-### Tested on
+- Supported: **OCN Fixed IP (IPoE)**
 
-- **Asahi Net** (asahi-net.jp) + NTT West Flets Hikari Cross (10G plan)
-- OPNsense 25.1 and 26.1.4 (FreeBSD 14.2)
-- Fixed IP: inbound port forwarding verified
-- Performance: 1.89 Gbps (iperf3 8-stream) through DS-Lite tunnel
+Official service page (NTT Docomo Business):
+
+- https://www.ntt.com/business/services/network/internet-connect/ocn-business/ftth.html
+
+---
+
+## Requirements
+
+1. OPNsense 26.1+
+2. WAN running on IPoE IPv6
+3. OCN fixed-IP contract values available (update URL, auth credentials, hostname token)
+
+Typical WAN settings:
+
+- IPv4: DHCP (environment-dependent) or None
+- IPv6: DHCPv6
+
+---
 
 ## Installation
 
-### On OPNsense (IPv6-only safe)
-
-**HB46PP branch (recommended for Fixed IP users):**
-
 ```sh
-curl -6 -skL -o /tmp/install-dslite.sh "https://raw.githubusercontent.com/kawaii-not-kawaii/ds-lite-opnsense/hb46pp/os-dslite-hb46pp/install.sh" && sh /tmp/install-dslite.sh
+# on your development machine
+git clone https://github.com/unchained-llc/os-ocnfixedip
+cd os-ocnfixedip
+scp -r ./os-ocnfixedip root@<opnsense-host>:./
+
+# on OPNsense
+sh /root/os-ocnfixedip/install.sh
 ```
 
-**Main branch (DS-Lite only):**
+---
 
-```sh
-curl -6 -skL -o /tmp/install-dslite.sh "https://raw.githubusercontent.com/kawaii-not-kawaii/ds-lite-opnsense/main/os-dslite/install.sh" && sh /tmp/install-dslite.sh
-```
+## Post-install required setup (important)
 
-### Remote install via SSH
+After enabling/applying the plugin settings, complete the following OPNsense steps or LAN clients will not have IPv4 Internet access:
 
-```sh
-git clone https://github.com/kawaii-not-kawaii/ds-lite-opnsense.git
-cd ds-lite-opnsense/os-dslite-hb46pp  # or os-dslite for main branch
-./deploy.sh <opnsense-ip>
-```
+1. Confirm tunnel interface assignment for `gif0` in **Interfaces > Assignments** (plugin tries to auto-assign as `TUNNEL`)
+2. Create/select IPv4 gateway on that assigned tunnel interface and mark it as **Upstream** in **System > Gateways > Configuration**
+3. Configure outbound NAT for LAN/internal networks to the tunnel interface in **Firewall > NAT > Outbound**
+4. Add a scrub normalization rule for tunnel egress MSS in **Firewall > Settings > Normalization**:
+   - Interface: `TUNNEL` (your assigned `gif0` interface)
+   - Direction: `Out`
+   - Protocol: `TCP`
+   - Source/Destination: `any`
+   - Max MSS: `1420`
+   - Example description: `OCN IPoE out`
 
-**Important:** After installing the plugin, you need to **reboot OPNsense** for the DS-Lite menu to appear under Interfaces.
+Recommended order:
 
-## Prerequisites
+1. Configure and apply this plugin (creates/configures `gif0`)
+2. Confirm `gif0` assignment (`TUNNEL`) was created (best-effort auto-assign)
+3. Configure tunnel gateway as Upstream
+4. Add outbound NAT rules
+5. Add normalization rule (Max MSS `1420`) on tunnel `Out`
 
-1. **WAN interface** (connected to NTT ONT)
-   - IPv4 Configuration Type: **None**
-   - IPv6 Configuration Type: **DHCPv6**
+If auto-assignment did not happen, assign `gif0` manually in **Interfaces > Assignments** and apply once more.
 
-2. **LAN interface**
-   - IPv6 Configuration Type: **Track Interface** (tracking WAN)
+## GUI Settings (Interfaces > OCN Fixed IP (IPoE))
 
-### NTT Prefix Delegation by Plan
+Current fields:
 
-| Plan | Typical PD Size | Notes |
-|------|----------------|-------|
-| Hikari Cross (10G) | /56 | Guaranteed PD, IPoE only |
-| Flets Hikari Next (1G) | /56 or /64 | PD available with current firmware |
-| Legacy 1G (no Hikari Denwa) | /64 | May require manual prefix config |
+- **Enable**
+  - Enables the plugin
 
-## Usage
+- **WAN Interface**
+  - WAN interface used as IPv6 prefix source
 
-### Fixed IP (with HB46PP auto-provisioning)
+- **BR / AFTR IPv6 Endpoint**
+  - Remote OCN BR IPv6 endpoint
 
-1. Navigate to **Interfaces > DS-Lite**
-2. Enable, select **Fixed IP** mode
-3. Enter your ISP provisioning credentials (User ID + Password)
-4. Select WAN interface
-5. Click **Apply**
+- **Fixed IPv4 Range Start**
+  - First address of your assigned fixed IPv4 block
+  - Example: for `203.0.113.96/255.255.255.240`, use `203.0.113.96`
 
-The plugin automatically discovers the provisioning server, authenticates, and configures the IPIP tunnel with your dedicated public IPv4.
+- **MTU** (Advanced)
+  - Default: `1460`
+  - MTU reference (NTT Docomo Business FAQ): https://support.ntt.com/ocn-business/faq/detail/pid2300001n9t/
 
-### DS-Lite (shared IPv4)
+- **Prefix Update URL**
+  - Example: `http://ipoe-static.ocn.ad.jp/nic/update`
 
-1. Navigate to **Interfaces > DS-Lite**
-2. Enable, select **DS-Lite** mode
-3. Select WAN interface
-4. Click **Apply**
+- **Prefix Update Hostname**
+  - OCN hostname token (example: `ieabc123def456`)
+  - If `hostname=` is missing in URL, the plugin appends it automatically
 
-The AFTR is auto-detected from your IPv6 prefix. No credentials needed for most ISPs.
+- **Auth User ID**
+  - Prefix update authentication user
 
-### Port Forwarding (Fixed IP only)
+- **Auth Password**
+  - Prefix update authentication password
 
-With a Fixed IP, you get a dedicated public IPv4 address. Port forwarding works through OPNsense's standard Destination NAT:
+Removed fields/features:
 
-**Firewall > NAT > Destination NAT** → Add rule mapping external port to internal server.
+- Local Tunnel IPv6 (now auto-calculated)
+- Tunnel Peer IPv4 input (now fixed)
+- NAT-related settings
+- Prefix Update Interval
 
-## How it works
+---
 
-### HB46PP Protocol
+## Runtime Behavior
 
-[HB46PP](https://github.com/v6pc/v6mig-prov/blob/master/spec.md) (HTTP-Based IPv4 over IPv6 Provisioning Protocol) is a Japanese standard for auto-configuring IPv4-over-IPv6 tunnels.
+### Local Tunnel IPv6 auto-calculation
 
-```
-1. DNS TXT lookup: 4over6.info → provisioning server URL
-2. HTTP GET with credentials → JSON response with tunnel parameters
-3. Auto-configure gif tunnel with received AFTR, local IPv6, fixed IPv4
-4. Re-provision every TTL (~17 hours) to maintain registration
-```
+`local_tunnel_v6 = WAN_global_v6_/64 + (fixed_ipv4 << 24)`
 
-The plugin implements this protocol to provide the same auto-provisioning experience as supported commercial routers (Yamaha, Buffalo, Allied Telesis, etc.).
+Example:
 
-### Tunnel Architecture
+- WAN prefix: `2001:db8:1234:5678::/64`
+- Fixed IPv4 Range Start: `203.0.113.96`
+- Calculated local tunnel IPv6: `2001:db8:1234:5678:cb00:7160:0:0`
 
-**Fixed IP (IPIP):**
-```
-[LAN] → [OPNsense NAT] → [gif0 IPIP tunnel] → [AFTR] → [Internet]
-                                                     ↓
-[Internet] → [AFTR] → [gif0] → [Destination NAT] → [LAN server]
-```
+### Prefix Update trigger timing
 
-**DS-Lite:**
-```
-[LAN] → [OPNsense NAT] → [gif0 DS-Lite tunnel] → [AFTR CG-NAT] → [Internet]
-```
+- Service start / restart / apply
+- WAN IPv6 renewal event (`newwanip(..., inet6)` path via `rc.newwanipv6`)
 
-### Technical Details
+### Routing
 
-- **Tunnel interface**: FreeBSD `gif` (IPv4-in-IPv6 encapsulation)
-- **MTU**: 1460 (1500 - 40 byte IPv6 header)
-- **MSS clamping**: Automatic via `net.inet.tcp.mss_ifmtu`
-- **NAT**: pf masquerade via registered anchors
-- **Firewall**: Integrated with OPNsense's pf anchor system
-- **Boot**: Auto-starts via `newwanip` and `vpn` configure hooks
+- Sets IPv4 default gateway to `192.0.0.1`
+- If `route change` fails, falls back to `delete/add`
 
-## Performance
+### Connectivity checks (status/diagnostics)
 
-Tested on Proxmox VM (4 cores, 4GB RAM) with Intel I226-V 2.5GbE NIC:
+- BR reachability is checked with IPv6 ping to **BR / AFTR IPv6 Endpoint** (user-configured value)
+- Internet reachability is checked with IPv4 ping to fixed destination `1.1.1.1` via tunnel source IPv4
 
-| Test | Result |
-|------|--------|
-| iperf3 8-stream download | 1.89 Gbps |
-| iperf3 8-stream upload | 536 Mbps |
-| speedtest-cli (Tokyo) | 1065 Mbps down / 475 Mbps up |
-| Latency to Google DNS | 23 ms |
+---
 
-## References & Sources
+## Log Checks
 
-- [HB46PP Specification](https://github.com/v6pc/v6mig-prov/blob/master/spec.md) — the provisioning protocol spec
-- [Yamaha Router HB46PP Documentation](https://www.rtpro.yamaha.co.jp/RT/docs/hb46pp/index.html) — where we discovered the protocol
-- [Yamaha v6 Connect IPIP Guide](https://www.rtpro.yamaha.co.jp/UTM/docs/utx/v6_connect/ipip.html) — configuration examples
-- [Asahi Net Fixed IP Setup](https://asahi-net.jp/support/guide/flets_cross/) — ISP documentation
-- [OPNsense Plugin Development](https://docs.opnsense.org/development/api.html) — MVC framework reference
-- [FreeBSD gif(4)](https://man.freebsd.org/cgi/man.cgi?gif(4)) — tunnel interface documentation
-- [RFC 6333](https://datatracker.ietf.org/doc/html/rfc6333) — DS-Lite specification
+Key expected logs:
+
+- `Auto-calculated local tunnel IPv6: ...`
+- `Sending prefix update to ...`
+- `Prefix update response: nochg ...` or `good ...`
+- `OCN Fixed IP (IPoE) tunnel configuration complete`
+
+Response meanings:
+
+- `nochg`: Already up to date (normal)
+- `good`: Update accepted (normal)
+- `nohost`: Hostname token mismatch likely
+
+---
 
 ## Uninstall
 
 ```sh
-curl -6 -skL -o /tmp/uninstall-dslite.sh "https://raw.githubusercontent.com/kawaii-not-kawaii/ds-lite-opnsense/hb46pp/os-dslite-hb46pp/uninstall.sh" && sh /tmp/uninstall-dslite.sh
+sh /root/os-ocnfixedip/uninstall.sh
 ```
 
-## Compatibility
+---
 
-- OPNsense 24.1+ (FreeBSD 14.x)
-- Tested on OPNsense 25.1 and 26.1.4
+## Development Notes
+
+Main files:
+
+- `src/etc/inc/plugins.inc.d/ocnfixedip.inc`
+- `src/opnsense/scripts/OPNsense/ocnfixedip/configure.sh`
+- `src/opnsense/scripts/OPNsense/ocnfixedip/lib.sh`
+- `src/opnsense/mvc/app/controllers/OPNsense/OCNFixedIP/forms/general.xml`
+
+---
 
 ## License
 

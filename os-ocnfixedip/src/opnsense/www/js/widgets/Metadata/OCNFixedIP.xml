@@ -6,9 +6,9 @@
             <endpoint>/api/ocnfixedip/service/status</endpoint>
         </endpoints>
         <translations>
-            <title>OCN Virtual Connect Fixed IP (IPIP)</title>
-            <unconfigured>OCN Virtual Connect Fixed IP tunnel is not configured. Click to set up.</unconfigured>
-            <disabled>OCN Virtual Connect Fixed IP tunnel is disabled.</disabled>
+            <title>OCN Fixed IP (IPoE) (IPIP)</title>
+            <unconfigured>OCN Fixed IP (IPoE) tunnel is not configured. Click to set up.</unconfigured>
+            <disabled>OCN Fixed IP (IPoE) tunnel is disabled.</disabled>
             <connected>Connected</connected>
             <tunnelup>Tunnel Up</tunnelup>
             <tunneldown>Tunnel Down</tunneldown>

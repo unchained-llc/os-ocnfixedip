@@ -3,7 +3,7 @@
         <id>ocnfixedip.enabled</id>
         <label>Enable</label>
         <type>checkbox</type>
-        <help>Enable OCN Virtual Connect Fixed IPv4 (IPIP over IPv6) tunnel.</help>
+        <help>Enable OCN Fixed IP (IPoE)v4 (IPIP over IPv6) tunnel.</help>
     </field>
     <field>
         <id>ocnfixedip.wan_interface</id>

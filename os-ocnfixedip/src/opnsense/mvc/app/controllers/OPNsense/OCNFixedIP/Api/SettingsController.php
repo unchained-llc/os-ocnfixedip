@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright (C) 2024 OCN Virtual Connect Fixed IP Plugin Contributors
+ * Copyright (C) 2024 OCN Fixed IP (IPoE) Plugin Contributors
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

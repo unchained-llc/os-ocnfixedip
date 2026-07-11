@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# OCN Virtual Connect Fixed IP (IPv4 over IPv6 IPIP) shared library functions
+# OCN Fixed IP (IPoE) (IPv4 over IPv6 IPIP) shared library functions
 
 TUNNEL_IF="gif0"
 CONFIG_XML="/conf/config.xml"
@@ -41,6 +41,25 @@ get_wan_global_v6() {
     ifconfig "${wan_if}" 2>/dev/null | awk '/inet6 / && $2 !~ /^fe80:/ && $2 !~ /^::1/ {gsub(/%.*/, "", $2); print $2; exit}'
 }
 
+get_wan_global_v6_with_retry() {
+    local attempts="${1:-6}"
+    local delay="${2:-1}"
+    local i=0
+    local v6=""
+
+    while [ "${i}" -lt "${attempts}" ]; do
+        v6=$(get_wan_global_v6)
+        if [ -n "${v6}" ]; then
+            printf '%s' "${v6}"
+            return 0
+        fi
+        i=$(( i + 1 ))
+        [ "${i}" -lt "${attempts}" ] && sleep "${delay}"
+    done
+
+    return 1
+}
+
 calc_local_tunnel_v6() {
     local wan_v6="$1"
     local v4="$2"
@@ -68,6 +87,4 @@ default_route_uses_tunnel() {
     route -n get default 2>/dev/null | grep -q "interface: ${TUNNEL_IF}"
 }
 
-remove_prefix_update_cron() {
-    (crontab -l 2>/dev/null | sed '/ocnfixedip-prefix-update/d;/OPNsense\/ocnfixedip\/prefix_update\.sh/d') | crontab -
-}
+

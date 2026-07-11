@@ -1,16 +1,16 @@
 #!/bin/sh
 
-# OPNsense OCN Virtual Connect Fixed IP Plugin Installer
-# Works over IPv6-only connections (for pre-tunnel install)
-# Run this directly on the OPNsense box:
-#   fetch --no-verify-hostname --no-verify-peer -o /tmp/install-ocnfixedip.sh "https://raw.githubusercontent.com/unchained-llc/os-ocnfixedip/main/os-ocnfixedip/install.sh" && sh /tmp/install-ocnfixedip.sh
+# OPNsense OCN Fixed IP (IPoE) Plugin Installer
+# Local/offline installer (no GitHub download)
+# 1) Copy this directory to OPNsense via scp
+# 2) Run: sh /path/to/os-ocnfixedip/install.sh
 
 set -e
 
-PLUGIN_URL="https://github.com/unchained-llc/os-ocnfixedip/archive/refs/heads/main.tar.gz"
-TMP_DIR="/tmp/ocnfixedip-install"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC="${SCRIPT_DIR}/src"
 
-echo "=== OPNsense OCN Virtual Connect Fixed IP Plugin Installer ==="
+echo "=== OPNsense OCN Fixed IP (IPoE) Plugin Installer ==="
 echo ""
 
 if [ ! -f /usr/local/etc/inc/plugins.inc.d/pf.inc ]; then
@@ -18,29 +18,13 @@ if [ ! -f /usr/local/etc/inc/plugins.inc.d/pf.inc ]; then
     exit 1
 fi
 
-echo "Downloading plugin..."
-rm -rf "${TMP_DIR}"
-mkdir -p "${TMP_DIR}"
-
-if command -v curl >/dev/null 2>&1; then
-    curl -6 -skL -o "${TMP_DIR}/plugin.tar.gz" "${PLUGIN_URL}"
-elif command -v fetch >/dev/null 2>&1; then
-    fetch --no-verify-hostname --no-verify-peer -o "${TMP_DIR}/plugin.tar.gz" "${PLUGIN_URL}"
-else
-    echo "ERROR: No download tool available (curl or fetch required)"
+if [ ! -f "${SRC}/opnsense/service/conf/actions.d/actions_ocnfixedip.conf" ]; then
+    echo "ERROR: Source files not found under ${SRC}"
+    echo "       Please run this script from inside the os-ocnfixedip directory copied to OPNsense."
     exit 1
 fi
 
-echo "Extracting..."
-tar -xzf "${TMP_DIR}/plugin.tar.gz" -C "${TMP_DIR}" --strip-components=3
-
-if [ ! -f "${TMP_DIR}/opnsense/service/conf/actions.d/actions_ocnfixedip.conf" ]; then
-    echo "ERROR: Unexpected archive layout; required plugin files not found."
-    exit 1
-fi
-
-echo "Installing plugin files..."
-SRC="${TMP_DIR}"
+echo "Installing plugin files from local source: ${SRC}"
 
 mkdir -p /usr/local/opnsense/mvc/app/models/OPNsense/OCNFixedIP/ACL
 mkdir -p /usr/local/opnsense/mvc/app/models/OPNsense/OCNFixedIP/Menu
@@ -84,20 +68,31 @@ rm -f \
     /usr/local/opnsense/www/js/widgets/DSLite.js \
     /usr/local/opnsense/www/js/widgets/Metadata/DSLite.xml 2>/dev/null || true
 
+opnsense-patch
+
 echo "Restarting configd..."
 service configd restart
 
 rm -rf /tmp/opnsense_*cache* 2>/dev/null
-rm -rf "${TMP_DIR}"
+
+# Pre-create gif0 so it is immediately available in Interface Assignments
+# on first-time setups before service enable/apply.
+if ! ifconfig gif0 >/dev/null 2>&1; then
+    if ifconfig gif0 create >/dev/null 2>&1; then
+        echo "Prepared gif0 for initial Interface Assignment."
+    else
+        echo "WARNING: Failed to pre-create gif0. You can run: ifconfig gif0 create"
+    fi
+fi
 
 echo ""
 echo "=== Installation complete! ==="
 echo ""
 echo "Next steps:"
 echo "  1. Log out and back into the OPNsense web UI"
-echo "  2. Go to Interfaces > OCN Virtual Connect Fixed IP"
-echo "  3. Enable OCN Virtual Connect Fixed IP, set required OCN settings, and click Apply"
+echo "  2. Go to Interfaces > OCN Fixed IP (IPoE)"
+echo "  3. Enable OCN Fixed IP (IPoE), set required OCN settings, and click Apply"
 echo ""
 echo "Prerequisites:"
-echo "  - WAN interface set to DHCPv6 (IPv4: None)"
+echo "  - WAN interface IPv6 set to DHCPv6 (IPv4: DHCP or None, depending on your environment)"
 echo ""

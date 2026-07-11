@@ -1,5 +1,5 @@
 {#
- # Copyright (C) 2024 OCN Virtual Connect Fixed IP Plugin Contributors
+ # Copyright (C) 2024 OCN Fixed IP (IPoE) Plugin Contributors
  # All rights reserved.
  #}
 
@@ -39,7 +39,7 @@
 
 <div class="content-box" style="padding: 10px;">
     <div class="content-box-header">
-        <h3>{{ lang._('OCN Virtual Connect Fixed IP IPIP Diagnostics') }}</h3>
+        <h3>{{ lang._('OCN Fixed IP (IPoE) IPIP Diagnostics') }}</h3>
     </div>
     <div class="content-box-main">
         <button class="btn btn-primary" id="refreshDiag" type="button">

@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright (C) 2024 OCN Virtual Connect Fixed IP Plugin Contributors
+ * Copyright (C) 2024 OCN Fixed IP (IPoE) Plugin Contributors
  * All rights reserved.
  */
 
@@ -29,11 +29,11 @@ function ocnfixedip_configure_do($verbose = false, $interfaces = null, $family =
      * Ignore IPv4-side triggers and only react to IPv6 renewal events.
      */
     if ($family !== null && $family !== 'inet6') {
-        service_log('Skipping OCN Virtual Connect Fixed IP reconfigure (non-inet6 trigger).', $verbose);
+        service_log('Skipping OCN Fixed IP (IPoE) reconfigure (non-inet6 trigger).', $verbose);
         return;
     }
 
-    service_log('Configuring OCN Virtual Connect Fixed IP tunnel...', $verbose);
+    service_log('Configuring OCN Fixed IP (IPoE) tunnel...', $verbose);
     configd_run('ocnfixedip configure');
     service_log("done.\n", $verbose);
 }
@@ -53,7 +53,7 @@ function ocnfixedip_services()
     }
 
     $services[] = [
-        'description' => 'OCN Virtual Connect Fixed IP Tunnel',
+        'description' => 'OCN Fixed IP (IPoE) Tunnel',
         'configd' => [
             'start' => ['ocnfixedip start'],
             'restart' => ['ocnfixedip restart'],
@@ -68,21 +68,12 @@ function ocnfixedip_services()
 
 function ocnfixedip_interfaces()
 {
-    $interfaces = [];
-
-    if (!ocnfixedip_enabled()) {
-        return $interfaces;
-    }
-
-    $interfaces['ocnfixedip'] = [
-        'descr' => gettext('OCN Virtual Connect Fixed IP (gif0)'),
-        'if' => 'gif0',
-        'virtual' => true,
-        'enable' => true,
-        'type' => 'gif',
-    ];
-
-    return $interfaces;
+    /*
+     * Do not register gif0 via plugin interface hook.
+     * gif0 should be handled as a standard interface assignment target
+     * to avoid conflicts in initial setup visibility.
+     */
+    return [];
 }
 
 function ocnfixedip_syslog()
