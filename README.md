@@ -136,11 +136,17 @@ Removed fields/features:
 
 `local_tunnel_v6 = WAN_global_v6_/56 + (fixed_ipv4 << 24)`
 
+Notes:
+
+- This plugin intentionally normalizes to `/56` before embedding the IPv4-derived interface ID.
+- In environments where WAN host address and delegated prefix differ (for example, HGW in front and delegated `/60` from an original `/56`), this keeps tunnel local IPv6 anchored to the `/56` base.
+
 Example:
 
-- WAN prefix: `2001:db8:1234:5600::/56`
+- WAN host IPv6: `2001:db8:1234:56f1::254`
+- `/56` base used by plugin: `2001:db8:1234:5600::/56`
 - Fixed IPv4 Range Start: `203.0.113.96`
-- Calculated local tunnel IPv6: `2001:db8:1234:5678:cb00:7160:0:0`
+- Calculated local tunnel IPv6: `2001:db8:1234:5600:cb:71:6000:0`
 
 ### Prefix Update trigger timing
 
@@ -158,6 +164,26 @@ Example:
 - Internet reachability is checked with IPv4 ping to fixed destination `1.1.1.1` via tunnel source IPv4
 
 ---
+
+## LAN IPv6 Prefix Tracking Recommendation (OPNsense 26.1+)
+
+For LAN/VLAN IPv6 prefix tracking, prefer `Identity association` mode.
+
+Recommended approach:
+
+1. Set WAN to `DHCPv6` (PD enabled as required by your ISP)
+2. For each LAN/VLAN interface, select `Identity association`
+3. Set per-interface Prefix ID (for example `1`, `3`, `4`)
+4. Set `Optional interface ID` to fix the host part
+
+Concrete example:
+
+- If you want LAN address `2001:db8:1234:5671::254`, set:
+  - Prefix ID: `1` (so LAN prefix becomes `...:5671::/64`)
+  - Optional interface ID: `254`
+- Result on prefix `2001:db8:1234:5670::/60` is `2001:db8:1234:5671::254/64`
+
+This provides PD follow-up on prefix changes while keeping consistent host IDs per interface.
 
 ## Log Checks
 
