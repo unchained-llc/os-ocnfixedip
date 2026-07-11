@@ -1,0 +1,62 @@
+<form>
+    <field>
+        <id>ocnfixedip.enabled</id>
+        <label>Enable</label>
+        <type>checkbox</type>
+        <help>Enable OCN Virtual Connect Fixed IPv4 (IPIP over IPv6) tunnel.</help>
+    </field>
+    <field>
+        <id>ocnfixedip.wan_interface</id>
+        <label>WAN Interface</label>
+        <type>dropdown</type>
+        <help>Select WAN interface used for DHCPv6-PD / native IPv6.</help>
+    </field>
+
+    <field>
+        <id>ocnfixedip.fixedip_aftr</id>
+        <label>BR / AFTR IPv6 Endpoint</label>
+        <type>text</type>
+        <help>Remote BR IPv6 endpoint (example: 2001:380:a120::a)</help>
+    </field>
+    <field>
+        <id>ocnfixedip.fixedip_v4</id>
+        <label>Fixed IPv4 Range Start</label>
+        <type>text</type>
+        <help>Enter the first address of your assigned fixed IPv4 block. Example: for 203.0.113.96/255.255.255.240, set 203.0.113.96.</help>
+    </field>
+
+
+    <field>
+        <id>ocnfixedip.mtu</id>
+        <label>MTU</label>
+        <type>text</type>
+        <help>Tunnel MTU. Default 1460.</help>
+        <advanced>true</advanced>
+    </field>
+
+    <field>
+        <id>ocnfixedip.fixedip_update_url</id>
+        <label>Prefix Update URL</label>
+        <type>text</type>
+        <help>OCN-provided base URL (example: http://ipoe-static.ocn.ad.jp/nic/update).</help>
+    </field>
+    <field>
+        <id>ocnfixedip.fixedip_update_hostname</id>
+        <label>Prefix Update Hostname</label>
+        <type>text</type>
+        <help>OCN update hostname token (example: 1301....). If set, plugin appends ?hostname=...</help>
+    </field>
+    <field>
+        <id>ocnfixedip.fixedip_auth_user</id>
+        <label>Auth User ID</label>
+        <type>text</type>
+        <help>Authentication user ID for prefix update (required).</help>
+    </field>
+    <field>
+        <id>ocnfixedip.fixedip_auth_pass</id>
+        <label>Auth Password</label>
+        <type>password</type>
+        <help>Authentication password for prefix update.</help>
+    </field>
+
+</form>

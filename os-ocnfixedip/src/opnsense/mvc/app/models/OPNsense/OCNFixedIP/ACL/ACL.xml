@@ -1,0 +1,10 @@
+<acl>
+    <page-ocnfixedip-config>
+        <name>Interfaces: OCN Virtual Connect Fixed IP</name>
+        <patterns>
+            <pattern>ui/ocnfixedip/*</pattern>
+            <pattern>api/ocnfixedip/settings/*</pattern>
+            <pattern>api/ocnfixedip/service/*</pattern>
+        </patterns>
+    </page-ocnfixedip-config>
+</acl>

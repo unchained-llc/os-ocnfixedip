@@ -1,0 +1,8 @@
+<menu>
+    <Interfaces>
+        <OCNFixedIP cssClass="fa fa-exchange fa-fw" VisibleName="OCN Virtual Connect Fixed IP">
+            <Settings order="10" url="/ui/ocnfixedip/general"/>
+            <Diagnostics order="20" url="/ui/ocnfixedip/diagnostics"/>
+        </OCNFixedIP>
+    </Interfaces>
+</menu>

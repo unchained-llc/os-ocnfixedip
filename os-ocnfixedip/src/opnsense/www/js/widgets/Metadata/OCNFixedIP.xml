@@ -1,0 +1,22 @@
+<metadata>
+    <ocnfixedip>
+        <filename>OCNFixedIP.js</filename>
+        <link>/ui/ocnfixedip/general</link>
+        <endpoints>
+            <endpoint>/api/ocnfixedip/service/status</endpoint>
+        </endpoints>
+        <translations>
+            <title>OCN Virtual Connect Fixed IP (IPIP)</title>
+            <unconfigured>OCN Virtual Connect Fixed IP tunnel is not configured. Click to set up.</unconfigured>
+            <disabled>OCN Virtual Connect Fixed IP tunnel is disabled.</disabled>
+            <connected>Connected</connected>
+            <tunnelup>Tunnel Up</tunnelup>
+            <tunneldown>Tunnel Down</tunneldown>
+            <nointernet>No Internet</nointernet>
+            <localv6>Local IPv6</localv6>
+            <aftr>BR IPv6</aftr>
+            <ipv4>IPv4</ipv4>
+            <mtu>MTU</mtu>
+        </translations>
+    </ocnfixedip>
+</metadata>

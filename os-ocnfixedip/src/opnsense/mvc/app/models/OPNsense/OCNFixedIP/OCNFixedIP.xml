@@ -1,0 +1,49 @@
+<model>
+    <mount>//OPNsense/ocnfixedip</mount>
+    <description>OCN Virtual Connect Fixed IP (IPv4 over IPv6 IPIP) tunnel configuration</description>
+    <version>2.0.0</version>
+    <items>
+        <enabled type="BooleanField">
+            <Default>0</Default>
+            <Required>Y</Required>
+        </enabled>
+        <wan_interface type="InterfaceField">
+            <Required>Y</Required>
+            <AllowDynamic>1</AllowDynamic>
+            <filters>
+                <enable>/^1$/</enable>
+            </filters>
+        </wan_interface>
+
+        <fixedip_aftr type="NetworkField">
+            <Required>Y</Required>
+            <NetMaskAllowed>N</NetMaskAllowed>
+            <AddressFamily>IPv6</AddressFamily>
+        </fixedip_aftr>
+        <fixedip_v4 type="NetworkField">
+            <Required>Y</Required>
+            <NetMaskAllowed>N</NetMaskAllowed>
+            <AddressFamily>IPv4</AddressFamily>
+        </fixedip_v4>
+
+        <mtu type="IntegerField">
+            <Default>1460</Default>
+            <Required>Y</Required>
+            <MinimumValue>1280</MinimumValue>
+            <MaximumValue>9000</MaximumValue>
+        </mtu>
+
+        <fixedip_update_url type="UrlField">
+            <Required>Y</Required>
+        </fixedip_update_url>
+        <fixedip_update_hostname type="TextField">
+            <Required>N</Required>
+        </fixedip_update_hostname>
+        <fixedip_auth_user type="TextField">
+            <Required>Y</Required>
+        </fixedip_auth_user>
+        <fixedip_auth_pass type="TextField">
+            <Required>N</Required>
+        </fixedip_auth_pass>
+    </items>
+</model>
