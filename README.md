@@ -46,6 +46,15 @@ Typical WAN settings:
 - IPv4: DHCP (environment-dependent) or None
 - IPv6: DHCPv6
 
+### NTT Prefix Delegation (Hikari Cross)
+
+| Plan | Typical PD Size | Notes |
+|---|---|---|
+| Hikari Cross (10G) | `/56` | Contract/base delegation |
+| Hikari Cross (10G) with HGW | `/60` | Downstream router may receive/use `/60` behind HGW |
+
+- This plugin's tunnel local IPv6 calculation is normalized to `/56` base.
+
 ---
 
 ## Installation
@@ -201,6 +210,28 @@ Response meanings:
 - `nohost`: Hostname token mismatch likely
 
 ---
+
+## Performance
+
+### User report (high-speed environment)
+
+Environment:
+
+- Proxmox `9.2.4`
+- VM: `16 vCPU / 8GB RAM`
+- Host CPU: `Ryzen 7 3700X`
+- NIC: `Mellanox ConnectX-4 Lx 25GbE` (uplink to switch at `10GbE`)
+- Measurement: `speedtest.net`
+
+Results:
+
+| Test | Result |
+|---|---|
+| speedtest.net Download | 8002 Mbps |
+| speedtest.net Upload | 6998 Mbps |
+| iperf3 8-stream download | 8.80 Gbps |
+| iperf3 8-stream upload | 8.13 Gbps |
+| ping 1.1.1.1 (16 samples) | avg 4.00 ms (min 3.667 / max 4.470) |
 
 ## Uninstall
 
