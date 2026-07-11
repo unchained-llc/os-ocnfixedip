@@ -3,6 +3,29 @@
 This is an OPNsense plugin dedicated to **OCN Fixed IP (IPoE)** (IPv4 over IPv6 / IPIP).
 It is focused on OCN fixed IP operation only.
 
+> [!IMPORTANT]
+> This is a community plugin and is not an official NTT Docomo Business or OPNsense product.
+> Keep console or another management path available while changing the default IPv4 route.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [How It Works](#how-it-works)
+- [Scope](#scope)
+- [Requirements](#requirements)
+- [Before You Install](#before-you-install)
+- [Installation](#installation)
+- [Initial Configuration](#initial-configuration)
+- [Post-install Required Setup](#post-install-required-setup-important)
+- [GUI Settings](#gui-settings-interfaces--ocn-fixed-ip-ipoe)
+- [Runtime Behavior](#runtime-behavior)
+- [Verification](#verification)
+- [Troubleshooting](#troubleshooting)
+- [Upgrade](#upgrade)
+- [Uninstall](#uninstall)
+- [Known Limitations](#known-limitations)
+- [Development Notes](#development-notes)
+
 ---
 
 ## Overview
@@ -23,6 +46,31 @@ Main behavior:
 - Cleans up previously managed WAN `/128` tunnel alias when prefix changes
 - Uses temporary `netrc` file for prefix update authentication (avoids exposing credentials in process args)
 
+## How It Works
+
+```text
+LAN / VLAN clients
+       |
+       | IPv4 + outbound NAT
+       v
+OPNsense gif0 (local fixed IPv4 -> 192.0.0.1)
+       |
+       | IPv4-in-IPv6 (IPIP)
+       v
+OCN BR IPv6 endpoint
+       |
+       v
+IPv4 Internet
+```
+
+The WAN continues to provide native IPv6. The plugin derives the local IPv6 tunnel
+endpoint from the current WAN `/56` base and the OCN fixed IPv4 range start. IPv4
+traffic is sent through `gif0`; IPv6 traffic is not translated by this plugin.
+
+The plugin is responsible for the tunnel and its immediate default route. OPNsense
+gateway monitoring, firewall policy, outbound NAT, and MSS normalization remain
+administrator-managed settings.
+
 ---
 
 ## Scope
@@ -40,6 +88,8 @@ Official service page (NTT Docomo Business):
 1. OPNsense 26.1+
 2. WAN running on IPoE IPv6
 3. OCN fixed-IP contract values available (update URL, auth credentials, hostname token)
+4. `python3`, `curl`, `xmllint`, and standard FreeBSD networking tools on OPNsense
+5. Administrative shell and Web UI access to OPNsense
 
 Typical WAN settings:
 
@@ -55,6 +105,24 @@ Typical WAN settings:
 
 - This plugin's tunnel local IPv6 calculation is normalized to `/56` base.
 
+## Before You Install
+
+Collect the following values from the OCN service activation documents or customer
+portal before starting:
+
+| Value | Example | Notes |
+|---|---|---|
+| BR / AFTR IPv6 endpoint | `2001:380:a120::a` | Use the value assigned for the service |
+| Fixed IPv4 range start | `203.0.113.96` | First address of the assigned block, not a host address chosen from it |
+| Prefix update URL | `http://ipoe-static.ocn.ad.jp/nic/update` | Use the OCN-provided URL |
+| Prefix update hostname | `ieabc123def456` | Token passed as the `hostname` query parameter |
+| Authentication user ID | Contract-specific | Used only for the prefix update request |
+| Authentication password | Contract-specific | Stored in the OPNsense configuration |
+
+Also record the current OPNsense IPv4 default route and export an OPNsense
+configuration backup. Applying this plugin changes the system IPv4 default route to
+the tunnel peer.
+
 ---
 
 ## Installation
@@ -68,6 +136,26 @@ scp -r ./os-ocnfixedip root@<opnsense-host>:./
 # on OPNsense
 sh /root/os-ocnfixedip/install.sh
 ```
+
+The installer copies the MVC, configd, runtime script, plugin hook, and dashboard
+widget files into the local OPNsense installation. It then refreshes OPNsense plugin
+metadata, restarts `configd`, clears UI caches, and pre-creates `gif0` when possible.
+
+After installation, log out of the Web UI and log back in so the new menu and ACL
+entries are loaded.
+
+## Initial Configuration
+
+1. Open **Interfaces > OCN Fixed IP (IPoE) > Settings**.
+2. Select the WAN interface that receives native IPv6 or DHCPv6-PD.
+3. Enter the OCN BR IPv6 endpoint and fixed IPv4 range start.
+4. Enter the prefix update URL, hostname token, user ID, and password.
+5. Leave MTU at `1460` unless OCN or your line conditions require another value.
+6. Enable the plugin and click **Apply**.
+7. Wait several seconds, then confirm that the status panel reports **Connected**.
+
+Applying the settings creates the tunnel, but LAN IPv4 forwarding is not complete
+until the gateway, outbound NAT, and MSS normalization steps below are configured.
 
 ---
 
@@ -95,6 +183,29 @@ Recommended order:
 5. Add normalization rule (Max MSS `1420`) on tunnel `Out`
 
 If auto-assignment did not happen, assign `gif0` manually in **Interfaces > Assignments** and apply once more.
+
+### Suggested gateway configuration
+
+- Interface: assigned `TUNNEL` interface
+- Address family: IPv4
+- Gateway address: `192.0.0.1`
+- Upstream gateway: enabled
+- Monitoring: configure according to your operational policy
+
+Avoid defining two competing default IPv4 gateways unless you intentionally use an
+OPNsense gateway group or policy routing.
+
+### Suggested outbound NAT rule
+
+Create rules for each internal IPv4 network that should use OCN Fixed IP:
+
+- Interface: `TUNNEL`
+- TCP/IP version: IPv4
+- Source: LAN/VLAN network
+- Translation / target: Interface address
+
+Use Hybrid or Manual outbound NAT mode when you need explicit control. Confirm that
+the resulting translation address is the assigned fixed IPv4 range start.
 
 ## GUI Settings (Interfaces > OCN Fixed IP (IPoE))
 
@@ -129,6 +240,7 @@ Current fields:
 
 - **Auth Password**
   - Prefix update authentication password
+  - Stored in `/conf/config.xml`; protect OPNsense backups accordingly
 
 Removed fields/features:
 
@@ -162,10 +274,19 @@ Example:
 - Service start / restart / apply
 - WAN IPv6 renewal event (`newwanip(..., inet6)` path via `rc.newwanipv6`)
 
+Repeated configure events within three seconds are ignored to reduce duplicate work
+during configuration-save and WAN-renewal races.
+
 ### Routing
 
 - Sets IPv4 default gateway to `192.0.0.1`
 - If `route change` fails, falls back to `delete/add`
+
+### Disable and stop behavior
+
+Disabling the service destroys `gif0`. The IPv4 default route is removed only when it
+currently uses `gif0`. OPNsense may then restore another configured gateway according
+to its own gateway management state.
 
 ### Connectivity checks (status/diagnostics)
 
@@ -209,6 +330,97 @@ Response meanings:
 - `good`: Update accepted (normal)
 - `nohost`: Hostname token mismatch likely
 
+## Verification
+
+### Web UI
+
+1. Open **Interfaces > OCN Fixed IP (IPoE)**.
+2. Confirm **Status: Connected**.
+3. Confirm Local IPv6, BR IPv6, Tunnel IPv4, and MTU match the expected values.
+4. Open **Diagnostics** and review the tunnel, route, BR ping, and Internet ping.
+
+### Shell
+
+Run these commands from the OPNsense shell:
+
+```sh
+ifconfig gif0
+route -n get default
+configctl ocnfixedip status
+configctl ocnfixedip diagnostics
+```
+
+Expected results:
+
+- `gif0` exists and includes `UP` and `RUNNING`
+- `tunnel inet6` shows the calculated local IPv6 and configured BR IPv6
+- the tunnel IPv4 is paired with `192.0.0.1`
+- the IPv4 default gateway is `192.0.0.1`
+- BR IPv6 and `1.1.1.1` connectivity checks succeed
+
+### Confirm the public IPv4 address
+
+From a LAN client routed through the tunnel, query a trusted public-IP service and
+confirm that the result belongs to the assigned OCN fixed IPv4 block. A successful
+router-side ping alone does not verify LAN outbound NAT and firewall policy.
+
+## Troubleshooting
+
+### Status is "Not started" or `gif0` is missing
+
+- Confirm **Enable** is selected and all required fields are saved.
+- Run `configctl ocnfixedip restart`.
+- Check `/var/log/system/latest.log` for `ocnfixedip` errors.
+- Confirm the selected WAN interface maps to a real interface device.
+
+### Local tunnel IPv6 cannot be calculated
+
+- Confirm WAN has a non-link-local IPv6 address with `ifconfig`.
+- Verify DHCPv6-PD/native IPv6 has completed before applying.
+- Confirm `python3` is available.
+- If renewal is still converging, wait several seconds and restart the service.
+
+### `gif0` is up but there is no IPv4 Internet access
+
+- Verify the default route points to `192.0.0.1`.
+- Verify the TUNNEL gateway is marked **Upstream**.
+- Check outbound NAT for every required LAN/VLAN network.
+- Check firewall rules permit LAN IPv4 traffic.
+- Add the TUNNEL outbound normalization rule with Max MSS `1420`.
+- Use the Diagnostics page to distinguish BR reachability from Internet reachability.
+
+### BR ping fails
+
+- Recheck the BR IPv6 endpoint against the OCN contract information.
+- Confirm native IPv6 routing works on WAN.
+- Confirm the calculated local tunnel IPv6 is present as a `/128` WAN alias.
+- Check upstream IPv6 firewall and routing policy.
+
+### Prefix update returns `nohost`
+
+The hostname token probably does not match the authentication account. Copy the
+hostname exactly as issued by OCN and ensure an old `hostname=` value is not already
+embedded in the configured URL.
+
+### Prefix update returns neither `good` nor `nochg`
+
+- Verify the URL, username, password, and hostname token.
+- Confirm OPNsense can reach the update endpoint over IPv6.
+- Inspect the complete `Prefix update response` log entry.
+- Note that the current implementation logs the response but does not fail the whole
+  configure operation based on the OCN response body.
+
+### WAN prefix changed but the tunnel did not recover
+
+The plugin normally runs through the `rc.newwanipv6` hook and replaces its previously
+tracked WAN `/128` alias. If convergence is delayed, run:
+
+```sh
+configctl ocnfixedip restart
+```
+
+Then confirm the new calculated address and prefix update response in the system log.
+
 ---
 
 ## Performance
@@ -233,11 +445,63 @@ Results:
 | iperf3 8-stream upload | 8.13 Gbps |
 | ping 1.1.1.1 (16 samples) | avg 4.00 ms (min 3.667 / max 4.470) |
 
+These results are a user report from one virtualized environment and are not a
+performance guarantee. Throughput depends on CPU, NIC offload behavior, virtualization,
+firewall rules, traffic shape, and the access network.
+
+## Upgrade
+
+To upgrade a manually installed copy:
+
+```sh
+# development machine
+git pull
+scp -r ./os-ocnfixedip root@<opnsense-host>:./
+
+# OPNsense
+sh /root/os-ocnfixedip/install.sh
+```
+
+The installer overwrites plugin program files but does not remove the existing
+`//OPNsense/ocnfixedip` configuration from `/conf/config.xml`. Export a configuration
+backup before upgrading and review release changes before applying them to a remote
+router.
+
 ## Uninstall
 
 ```sh
 sh /root/os-ocnfixedip/uninstall.sh
 ```
+
+Uninstallation stops and removes the plugin files and destroys `gif0`. It deliberately
+leaves the plugin configuration in `/conf/config.xml`, and it does not remove gateway,
+outbound NAT, normalization, firewall, or interface-assignment configuration created
+outside the plugin. Review and remove those entries manually when they are no longer
+needed.
+
+## Known Limitations
+
+- OCN Fixed IP (IPoE) only; this is not a generic DS-Lite or MAP-E implementation.
+- One hard-coded tunnel interface, `gif0`, and one fixed peer IPv4, `192.0.0.1`.
+- The local tunnel address calculation intentionally assumes an OCN `/56` base.
+- Applying the service directly changes the system IPv4 default route.
+- Gateway, outbound NAT, firewall, and MSS normalization are not created automatically.
+- WAN IPv6 selection uses the first non-link-local IPv6 found on the selected device.
+- Prefix update results are logged but are not currently validated as success/failure.
+- The installer is a local file-copy installer, not an OPNsense package repository.
+- Automated tests and an OPNsense VM integration-test workflow are not included yet.
+
+## Security Notes
+
+- Prefix update credentials are stored in the OPNsense configuration and therefore
+  may be present in exported backups.
+- Runtime authentication uses a mode-`0600` temporary netrc file so credentials are
+  not placed directly in the `curl` process arguments.
+- The current request uses `curl -k`, which disables TLS certificate verification for
+  HTTPS update URLs. Use only the endpoint provided by OCN and restrict administrative
+  access to the router.
+- Diagnostic output contains interface addresses and routing information; sanitize it
+  before posting publicly.
 
 ---
 
@@ -245,10 +509,27 @@ sh /root/os-ocnfixedip/uninstall.sh
 
 Main files:
 
-- `src/etc/inc/plugins.inc.d/ocnfixedip.inc`
-- `src/opnsense/scripts/OPNsense/ocnfixedip/configure.sh`
-- `src/opnsense/scripts/OPNsense/ocnfixedip/lib.sh`
-- `src/opnsense/mvc/app/controllers/OPNsense/OCNFixedIP/forms/general.xml`
+- `os-ocnfixedip/src/etc/inc/plugins.inc.d/ocnfixedip.inc`
+- `os-ocnfixedip/src/opnsense/scripts/OPNsense/ocnfixedip/configure.sh`
+- `os-ocnfixedip/src/opnsense/scripts/OPNsense/ocnfixedip/lib.sh`
+- `os-ocnfixedip/src/opnsense/mvc/app/controllers/OPNsense/OCNFixedIP/forms/general.xml`
+
+Repository structure:
+
+```text
+os-ocnfixedip/
+  install.sh                         Local/offline installer
+  uninstall.sh                       Uninstaller
+  src/etc/inc/plugins.inc.d/         OPNsense lifecycle hooks
+  src/opnsense/service/conf/         configd actions
+  src/opnsense/scripts/              Tunnel runtime and diagnostics
+  src/opnsense/mvc/                  Model, API, forms, views, ACL, and menu
+  src/opnsense/www/js/widgets/       Dashboard widget
+```
+
+There is currently no test harness. At minimum, changes should be checked with shell
+syntax validation and then exercised on a disposable OPNsense VM for configure,
+restart, IPv6 prefix renewal, disable, and uninstall paths.
 
 ---
 
