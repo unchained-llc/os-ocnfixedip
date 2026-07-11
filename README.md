@@ -14,7 +14,7 @@ Main behavior:
 - Builds an OCN fixed-IP IPIP tunnel on `gif0`
 - Uses a fixed `Tunnel Peer IPv4` value: `192.0.0.1`
 - Auto-calculates `Local Tunnel IPv6`
-  - Uses WAN global IPv6 `/64`
+  - Uses WAN global IPv6 `/56`
   - Builds interface ID from the fixed IPv4 range start
 - Runs Prefix Update (OCN API)
   - On startup / apply / WAN IPv6 renewal
@@ -134,11 +134,11 @@ Removed fields/features:
 
 ### Local Tunnel IPv6 auto-calculation
 
-`local_tunnel_v6 = WAN_global_v6_/64 + (fixed_ipv4 << 24)`
+`local_tunnel_v6 = WAN_global_v6_/56 + (fixed_ipv4 << 24)`
 
 Example:
 
-- WAN prefix: `2001:db8:1234:5678::/64`
+- WAN prefix: `2001:db8:1234:5600::/56`
 - Fixed IPv4 Range Start: `203.0.113.96`
 - Calculated local tunnel IPv6: `2001:db8:1234:5678:cb00:7160:0:0`
 

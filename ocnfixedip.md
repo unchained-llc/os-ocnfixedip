@@ -43,13 +43,13 @@ MTU reference (NTT Docomo Business FAQ):
 
 Formula:
 
-`local_tunnel_v6 = WAN_global_v6_/64 + (fixed_ipv4 << 24)`
+`local_tunnel_v6 = WAN_global_v6_/56 + (fixed_ipv4 << 24)`
 
 WAN global IPv6 detection uses a short retry window to absorb DHCPv6 renewal timing races.
 
 Example:
 
-- WAN prefix: `2001:db8:1234:5678::/64`
+- WAN prefix: `2001:db8:1234:5600::/56`
 - Fixed IPv4 range start: `203.0.113.96`
 - Result: `2001:db8:1234:5678:cb00:7160:0:0`
 

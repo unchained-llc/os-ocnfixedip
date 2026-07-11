@@ -37,7 +37,7 @@ if [ -z "${FIXEDIP_AFTR}" ] || [ -z "${FIXEDIP_V4}" ]; then
     exit 1
 fi
 
-# Auto-calculate local tunnel IPv6 from WAN global IPv6 /64 and fixed IPv4.
+# Auto-calculate local tunnel IPv6 from WAN global IPv6 /56 and fixed IPv4.
 # Interface-ID formula: ipv4(32bit) << 24  (e.g. 203.0.113.96 -> 00cb:0071:6000:0000)
 WAN_GLOBAL_V6=$(get_wan_global_v6_with_retry 6 1)
 LOCAL_TUNNEL_V6=$(calc_local_tunnel_v6 "${WAN_GLOBAL_V6}" "${FIXEDIP_V4}")

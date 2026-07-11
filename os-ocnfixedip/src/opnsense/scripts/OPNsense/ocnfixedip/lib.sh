@@ -72,9 +72,9 @@ calc_local_tunnel_v6() {
 import ipaddress, sys
 wan = ipaddress.ip_address(sys.argv[1])
 v4 = int(ipaddress.ip_address(sys.argv[2]))
-net64 = ipaddress.ip_network(str(wan) + "/64", strict=False)
+net56 = ipaddress.ip_network(str(wan) + "/56", strict=False)
 iface_id = v4 << 24
-addr = int(net64.network_address) | iface_id
+addr = int(net56.network_address) | iface_id
 print(ipaddress.ip_address(addr))
 ' "${wan_v6}" "${v4}" 2>/dev/null
 }
