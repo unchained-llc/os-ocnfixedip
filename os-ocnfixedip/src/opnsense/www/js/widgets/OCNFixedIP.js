@@ -68,10 +68,14 @@ export default class OCNFixedIP extends BaseTableWidget {
         }
 
         let statusIcon, statusText, statusClass;
-        if (t.status === 'up' && t.connectivity === 'connected') {
+        if (t.status === 'up' && t.health === 'healthy') {
             statusIcon = 'fa-check-circle text-success';
-            statusText = this.translations.connected;
+            statusText = 'HEALTHY';
             statusClass = 'text-success';
+        } else if (t.status === 'up' && t.connectivity === 'connected') {
+            statusIcon = 'fa-check-circle text-success';
+            statusText = this.translations.connected + ' (degraded)';
+            statusClass = 'text-warning';
         } else if (t.status === 'up' && t.connectivity === 'no internet') {
             statusIcon = 'fa-exclamation-circle text-warning';
             statusText = this.translations.nointernet;
@@ -86,20 +90,27 @@ export default class OCNFixedIP extends BaseTableWidget {
             statusClass = 'text-danger';
         }
 
+        const statusLabel = `<a href="/ui/ocnfixedip/diagnostics" class="${statusClass}" title="Open diagnostics"><b>${statusText}</b></a>`;
+
         let statusRow = `
             <div style="display: flex; align-items: center; gap: 8px;">
                 <i class="fa ${statusIcon}" style="font-size: 14px;"></i>
-                <span class="${statusClass}"><b>${statusText}</b></span>
+                ${statusLabel}
             </div>`;
 
         let detailsRow = '';
         if (t.status === 'up') {
+            let failures = '';
+            if (t.health && t.health !== 'healthy' && t.health_failures) {
+                failures = `<div><small class="text-warning"><b>Health failures:</b> ${this._esc(t.health_failures)}</small></div>`;
+            }
             detailsRow = `
                 <div style="padding: 4px 0;">
                     <div><small><b>${this.translations.localv6}:</b> ${this._esc(t.local_v6 || '-')}</small></div>
                     <div><small><b>${this.translations.aftr}:</b> ${this._esc(t.aftr || '-')}</small></div>
                     <div><small><b>${this.translations.ipv4}:</b> ${this._esc(t.ipv4 || '-')}</small></div>
                     <div><small><b>${this.translations.mtu}:</b> ${this._esc(t.mtu || '-')}</small></div>
+                    ${failures}
                 </div>`;
         } else if (t.reason) {
             detailsRow = `

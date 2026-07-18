@@ -44,7 +44,7 @@
         <id>ocnfixedip.fixedip_update_hostname</id>
         <label>Prefix Update Hostname</label>
         <type>text</type>
-        <help>OCN update hostname token (example: 1301....). If set, plugin appends ?hostname=...</help>
+        <help>OCN hostname token for the hostname query parameter (example: 1301...).</help>
     </field>
     <field>
         <id>ocnfixedip.fixedip_auth_user</id>

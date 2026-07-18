@@ -203,8 +203,12 @@ logger -t ocnfixedip "Sending prefix update to ${UPDATE_URL}"
 NETRC=$(mktemp /tmp/ocnfixedip-netrc.XXXXXX)
 chmod 600 "${NETRC}"
 printf "default\nlogin %s\npassword %s\n" "${FIXEDIP_AUTH_USER}" "${FIXEDIP_AUTH_PASS}" > "${NETRC}"
-UPDATE_RESULT=$(curl -6 -sk --netrc-file "${NETRC}" "${UPDATE_URL}" 2>&1)
+UPDATE_RESULT=$(curl -6 -sk --connect-timeout 2 --netrc-file "${NETRC}" "${UPDATE_URL}" 2>&1)
+UPDATE_RC=$?
 rm -f "${NETRC}"
+UPDATE_CODE=$(printf '%s' "${UPDATE_RESULT}" | awk '{print $1; exit}')
+[ -n "${UPDATE_CODE}" ] || UPDATE_CODE="curl-error"
+printf '%s %s %s\n' "$(date +%s)" "${UPDATE_RC}" "${UPDATE_CODE}" > /var/run/ocnfixedip_prefix_update_status
 logger -t ocnfixedip "Prefix update response: ${UPDATE_RESULT}"
 
 logger -t ocnfixedip "OCN Fixed IP (IPoE) tunnel configuration complete"

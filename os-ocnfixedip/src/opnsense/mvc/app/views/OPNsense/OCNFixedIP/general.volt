@@ -51,8 +51,10 @@
                 }
 
                 var t = data.tunnel;
-                if (t.status === 'up' && t.connectivity === 'connected') {
-                    setStatus('Connected', 'fa-check-circle text-success', 'label-success');
+                if (t.status === 'up' && t.health === 'healthy') {
+                    setStatus('HEALTHY', 'fa-check-circle text-success', 'label-success');
+                } else if (t.status === 'up' && t.connectivity === 'connected') {
+                    setStatus('Connected (Degraded)', 'fa-exclamation-circle text-warning', 'label-warning');
                 } else if (t.status === 'up' && t.connectivity === 'no internet') {
                     setStatus('Tunnel Up (No Internet)', 'fa-exclamation-circle text-warning', 'label-warning');
                 } else if (t.status === 'up') {
@@ -63,8 +65,10 @@
                     setStatus('Not Running', 'fa-circle text-danger', 'label-danger');
                 }
 
-                if (t.connectivity === 'connected') {
-                    $('#tunnel_connectivity').html('<span class="text-success">OK</span>');
+                if (t.health === 'healthy') {
+                    $('#tunnel_connectivity').html('<span class="text-success">HEALTHY</span>');
+                } else if (t.connectivity === 'connected') {
+                    $('#tunnel_connectivity').html('<span class="text-warning">Connected (degraded)</span>');
                 } else if (t.connectivity === 'no internet') {
                     $('#tunnel_connectivity').html('<span class="text-warning">No Internet</span>');
                 } else {

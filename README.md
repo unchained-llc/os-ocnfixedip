@@ -7,9 +7,20 @@ It is focused on OCN fixed IP operation only.
 > This is a community plugin and is not an official NTT Docomo Business or OPNsense product.
 > Keep console or another management path available while changing the default IPv4 route.
 
+## Screenshots
+
+### Settings
+
+![OCN Fixed IP Settings](./Settings.png)
+
+### Diagnostics
+
+![OCN Fixed IP Diagnostics](./Diagnostics.png)
+
 ## Table of Contents
 
 - [Overview](#overview)
+- [Screenshots](#screenshots)
 - [How It Works](#how-it-works)
 - [Scope](#scope)
 - [Requirements](#requirements)
@@ -152,7 +163,7 @@ entries are loaded.
 4. Enter the prefix update URL, hostname token, user ID, and password.
 5. Leave MTU at `1460` unless OCN or your line conditions require another value.
 6. Enable the plugin and click **Apply**.
-7. Wait several seconds, then confirm that the status panel reports **Connected**.
+7. Wait several seconds, then confirm that the status panel reports **HEALTHY**.
 
 Applying the settings creates the tunnel, but LAN IPv4 forwarding is not complete
 until the gateway, outbound NAT, and MSS normalization steps below are configured.
@@ -232,8 +243,7 @@ Current fields:
   - Example: `http://ipoe-static.ocn.ad.jp/nic/update`
 
 - **Prefix Update Hostname**
-  - OCN hostname token (example: `ieabc123def456`)
-  - If `hostname=` is missing in URL, the plugin appends it automatically
+  - OCN hostname token for the `hostname` query parameter (example: `ieabc123def456`)
 
 - **Auth User ID**
   - Prefix update authentication user
@@ -288,10 +298,20 @@ Disabling the service destroys `gif0`. The IPv4 default route is removed only wh
 currently uses `gif0`. OPNsense may then restore another configured gateway according
 to its own gateway management state.
 
-### Connectivity checks (status/diagnostics)
+### Connectivity and health checks (status/diagnostics)
 
-- BR reachability is checked with IPv6 ping to **BR / AFTR IPv6 Endpoint** (user-configured value)
-- Internet reachability is checked with IPv4 ping to fixed destination `1.1.1.1` via tunnel source IPv4
+Status `HEALTHY` requires all key checks to pass, including:
+
+- `gif0` is `RUNNING`
+- IPv4 default route is `192.0.0.1` via `gif0`
+- DNS name resolution succeeds
+- WAN `/128` alias for local tunnel IPv6 exists
+- CE-source IPv6 ping to BR endpoint succeeds
+- Tunnel-IPv4-source ping to `1.1.1.1` succeeds
+- CE-source IPv6 ping to `2606:4700:4700::1111` succeeds
+- Configured MTU matches runtime MTU
+- MTU DF probe (`IPv4 DF ping`) succeeds
+- Large packet fragmentation probe (`DF off`) succeeds
 
 ---
 
@@ -335,9 +355,18 @@ Response meanings:
 ### Web UI
 
 1. Open **Interfaces > OCN Fixed IP (IPoE)**.
-2. Confirm **Status: Connected**.
-3. Confirm Local IPv6, BR IPv6, Tunnel IPv4, and MTU match the expected values.
-4. Open **Diagnostics** and review the tunnel, route, BR ping, and Internet ping.
+2. Confirm **Status: HEALTHY** (or review degraded state details).
+3. Confirm Local IPv6, BR IPv6, Tunnel IPv4, and MTU match expected values.
+4. Open **Diagnostics** and review endpoint checks in this order:
+   - Tunnel state
+   - Default route to tunnel
+   - WAN `/128` alias presence
+   - CE -> BR ping
+   - IPv4 internet ping (`source: tunnel IPv4`)
+   - IPv6 internet ping (`source: CE IPv6`)
+   - Name resolution
+   - MTU checks (config/DF/fragmentation)
+   - Prefix update API check
 
 ### Shell
 
@@ -356,7 +385,8 @@ Expected results:
 - `tunnel inet6` shows the calculated local IPv6 and configured BR IPv6
 - the tunnel IPv4 is paired with `192.0.0.1`
 - the IPv4 default gateway is `192.0.0.1`
-- BR IPv6 and `1.1.1.1` connectivity checks succeed
+- status JSON reports `health: healthy` (or inspect `health_failures` when degraded)
+- BR/IPv4/IPv6 connectivity checks succeed
 
 ### Confirm the public IPv4 address
 
@@ -387,7 +417,7 @@ router-side ping alone does not verify LAN outbound NAT and firewall policy.
 - Check outbound NAT for every required LAN/VLAN network.
 - Check firewall rules permit LAN IPv4 traffic.
 - Add the TUNNEL outbound normalization rule with Max MSS `1420`.
-- Use the Diagnostics page to distinguish BR reachability from Internet reachability.
+- Use the Diagnostics page to identify which specific check is failing (route, alias, BR, IPv4/IPv6 internet, DNS, MTU, or prefix update).
 
 ### BR ping fails
 
@@ -407,8 +437,8 @@ embedded in the configured URL.
 - Verify the URL, username, password, and hostname token.
 - Confirm OPNsense can reach the update endpoint over IPv6.
 - Inspect the complete `Prefix update response` log entry.
-- Note that the current implementation logs the response but does not fail the whole
-  configure operation based on the OCN response body.
+- Use **Diagnostics > Prefix update API check** for an immediate endpoint/auth check.
+- Note: Diagnostics executes a live update request, so `good`/`nochg` responses are expected during testing.
 
 ### WAN prefix changed but the tunnel did not recover
 
