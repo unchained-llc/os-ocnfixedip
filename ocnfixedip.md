@@ -472,21 +472,26 @@ Diagnostics returns structured check-by-check JSON under `checks` and the UI ren
 
 - Per-check status badges (`ok` / `ng` / `skipped` / `not-configured`)
 - Source/target details and RTT when available
-- A summary section (`x/11 checks passed`) with success/failure guidance
+- A summary section (`x/16 checks passed`) with success/failure guidance
 
 Current diagnostics checks (ordered):
 
 1. Tunnel state
-2. Default route to tunnel
+2. IPv4 default route to tunnel
 3. WAN `/128` alias presence
-4. CE -> BR ping
-5. Prefix update API check (live call)
-6. IPv4 internet ping (tunnel IPv4 source)
-7. IPv6 internet ping (CE source)
-8. Name resolution
-9. MTU config match
-10. MTU DF probe
-11. Large packet fragmentation test
+4. Tunnel MTU config match
+5. IPv6 CE-to-BR Ping
+6. Prefix update API check (live call)
+7. IPv4 internet Ping `1.1.1.1` (tunnel IPv4 source)
+8. IPv6 internet Ping `2606:4700:4700::1111` (CE source)
+9. IPv4 MTU probe (DF Ping)
+10. IPv6 MTU probe (DF Ping)
+11. IPv4 large packet fragmentation test
+12. IPv6 large packet fragmentation test
+13. DNS A name resolution
+14. IPv4 curl `one.one.one.one` (tunnel IPv4 source)
+15. DNS AAAA name resolution
+16. IPv6 curl `one.one.one.one` (CE IPv6 source)
 
 Diagnostics also updates `/var/run/ocnfixedip_prefix_update_status` so status/widget
 health remains aligned with the latest prefix-update outcome.

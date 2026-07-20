@@ -300,18 +300,22 @@ to its own gateway management state.
 
 ### Connectivity and health checks (status/diagnostics)
 
-Status `HEALTHY` requires all key checks to pass, including:
+Status `HEALTHY` (used by the dashboard widget and main status panel) is computed by
+`status.sh` and currently requires these checks:
 
 - `gif0` is `RUNNING`
 - IPv4 default route is `192.0.0.1` via `gif0`
-- DNS name resolution succeeds
-- WAN `/128` alias for local tunnel IPv6 exists
-- CE-source IPv6 ping to BR endpoint succeeds
-- Tunnel-IPv4-source ping to `1.1.1.1` succeeds
-- CE-source IPv6 ping to `2606:4700:4700::1111` succeeds
+- DNS `A` lookup for `one.one.one.one` succeeds
 - Configured MTU matches runtime MTU
-- MTU DF probe (`IPv4 DF ping`) succeeds
-- Large packet fragmentation probe (`DF off`) succeeds
+- WAN `/128` alias for local tunnel IPv6 exists
+- Last recorded prefix update result is `good` or `nochg`
+- IPv6 CE-to-BR Ping succeeds
+- IPv4 internet Ping to `1.1.1.1` succeeds from tunnel IPv4 source
+- IPv6 internet Ping to `2606:4700:4700::1111` succeeds from CE source
+- IPv4 MTU probe (`DF Ping`) succeeds
+- IPv4 large packet fragmentation test (`DF off`) succeeds
+
+Diagnostics (`diagnostics.sh`) runs an extended set of endpoint tests (including AAAA resolution, IPv6 MTU probes, IPv6 large-packet fragmentation behavior, and curl checks) for troubleshooting depth.
 
 ---
 
@@ -359,14 +363,21 @@ Response meanings:
 3. Confirm Local IPv6, BR IPv6, Tunnel IPv4, and MTU match expected values.
 4. Open **Diagnostics** and review endpoint checks in this order:
    - Tunnel state
-   - Default route to tunnel
+   - IPv4 default route to tunnel
    - WAN `/128` alias presence
-   - CE -> BR ping
-   - IPv4 internet ping (`source: tunnel IPv4`)
-   - IPv6 internet ping (`source: CE IPv6`)
-   - Name resolution
-   - MTU checks (config/DF/fragmentation)
+   - Tunnel MTU config
+   - IPv6 CE-to-BR Ping
    - Prefix update API check
+   - IPv4 internet Ping 1.1.1.1
+   - IPv6 internet Ping 2606:4700:4700::1111
+   - IPv4 MTU probe (DF Ping)
+   - IPv6 MTU probe (DF Ping)
+   - IPv4 large packet fragmentation test
+   - IPv6 large packet fragmentation test
+   - DNS A name resolution
+   - IPv4 curl one.one.one.one
+   - DNS AAAA name resolution
+   - IPv6 curl one.one.one.one
 
 ### Shell
 
@@ -417,7 +428,7 @@ router-side ping alone does not verify LAN outbound NAT and firewall policy.
 - Check outbound NAT for every required LAN/VLAN network.
 - Check firewall rules permit LAN IPv4 traffic.
 - Add the TUNNEL outbound normalization rule with Max MSS `1420`.
-- Use the Diagnostics page to identify which specific check is failing (route, alias, BR, IPv4/IPv6 internet, DNS, MTU, or prefix update).
+- Use the Diagnostics page to identify which specific check is failing (route, alias, BR, IPv4/IPv6 internet, DNS A/AAAA, curl v4/v6, MTU including IPv6 fragmentation, or prefix update).
 
 ### BR ping fails
 
@@ -517,7 +528,7 @@ needed.
 - Applying the service directly changes the system IPv4 default route.
 - Gateway, outbound NAT, firewall, and MSS normalization are not created automatically.
 - WAN IPv6 selection uses the first non-link-local IPv6 found on the selected device.
-- Prefix update results are logged but are not currently validated as success/failure.
+- Prefix update failure does not fail the configure transaction; it is reflected through status/diagnostics health state instead.
 - The installer is a local file-copy installer, not an OPNsense package repository.
 - Automated tests and an OPNsense VM integration-test workflow are not included yet.
 
