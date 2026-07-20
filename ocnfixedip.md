@@ -143,8 +143,6 @@ Update endpoint is called when:
 
 Credentials are passed via a temporary `netrc` file when invoking `curl`.
 
-The plugin appends `hostname=` if missing in the configured URL and uses configured auth credentials.
-
 Typical responses:
 
 - `good ...` : update accepted
@@ -154,15 +152,15 @@ Typical responses:
 Request behavior:
 
 - Forces IPv6 transport with `curl -6`
+- Uses `--connect-timeout 2` to avoid long hangs on unreachable endpoints
 - Uses a temporary mode-`0600` netrc file
 - Appends `hostname=` only when a hostname is configured and the URL does not already
   contain that parameter
 - Accepts URLs that already contain other query parameters
 - Logs the final URL and response body
 
-The current implementation does not parse the response body or propagate a failed
-OCN response as a nonzero configure result. `curl` output is operational evidence,
-not currently a health-state input.
+Prefix update failure does not make `configure.sh` exit nonzero, but it is consumed by
+status health logic through `/var/run/ocnfixedip_prefix_update_status`.
 
 ---
 
@@ -241,8 +239,8 @@ Removed from UI:
 - Prefix Update Interval
 
 The main page polls status every five seconds and performs additional status refreshes
-two and five seconds after Apply. The Diagnostics page runs immediately on load and
-can be refreshed manually. All user-visible settings are backed by the MVC model.
+two and five seconds after Apply. The Diagnostics page runs immediately on load
+(without a manual refresh button). All user-visible settings are backed by the MVC model.
 
 ---
 
@@ -387,12 +385,13 @@ place—for example, a WAN alias may exist even if later tunnel creation fails.
 
 ## 12. Runtime State and Idempotency
 
-Two small state mechanisms are used:
+Three small state mechanisms are used:
 
 | Path | Purpose | Lifetime |
 |---|---|---|
 | `/tmp/ocnfixedip_configure.stamp` | Suppress configure triggers less than three seconds apart | Until reboot or manual cleanup |
 | `/var/run/ocnfixedip_local_tunnel_v6` | Track the plugin-managed WAN `/128` alias | Until teardown/reboot |
+| `/var/run/ocnfixedip_prefix_update_status` | Record latest prefix-update result for status health | Until reboot or next configure/diagnostics run |
 
 The timestamp is a debounce mechanism, not a process lock. Two long-running configure
 processes can overlap if the second starts more than three seconds after the first.
@@ -447,31 +446,50 @@ separate daemon process or PID to monitor.
 
 ### 14.1 Status state machine
 
-Status is derived from interface and ping observations:
+Status is machine-readable and health-driven. `health=healthy` is reported only when all
+required checks pass. Otherwise `health=degraded` with a comma-separated
+`health_failures` list.
 
-| Tunnel observation | Connectivity observation | Reported meaning |
-|---|---|---|
-| `gif0` absent, model disabled | Not tested | `disabled` / `offline` |
-| `gif0` absent, model enabled | Not tested | `not configured` / `offline` |
-| `gif0` present without `RUNNING` | Not tested | `down` |
-| `RUNNING`, BR ping fails | Failed | `up` / `no internet` |
-| `RUNNING`, BR succeeds, IPv4 ping fails | Failed | `up` / `no internet` |
-| Both pings succeed | Successful | `up` / `connected` |
+Current status checks include:
 
-The BR check uses the configured IPv6 endpoint, falling back to the tunnel endpoint
-observed from `ifconfig`. The Internet check sends an IPv4 ping to `1.1.1.1` with the
-tunnel IPv4 as the source.
+1. `tunnel_state` (`gif0` RUNNING)
+2. `default_route` (`192.0.0.1` via `gif0`)
+3. `dns` (`one.one.one.one` A resolution)
+4. `mtu` (configured vs runtime)
+5. `wan_alias` (WAN has CE `/128` alias)
+6. `prefix_update` (last recorded update result from `/var/run/ocnfixedip_prefix_update_status`)
+7. `ce_to_br` (IPv6 ping from CE source to BR)
+8. `internet` (IPv4 ping to `1.1.1.1` from tunnel IPv4 source)
+9. `ipv6_internet` (IPv6 ping to `2606:4700:4700::1111` from CE source)
+10. `mtu_probe` (IPv4 DF probe at tunnel MTU)
+11. `mtu_fragmentation` (large IPv4 packet probe with DF off)
+
+Dashboard widget and settings-page status rely on this same status JSON.
 
 ### 14.2 Diagnostics payload
 
-Diagnostics returns JSON containing escaped multiline strings:
+Diagnostics returns structured check-by-check JSON under `checks` and the UI renders:
 
-- `interface`: full `ifconfig gif0` output or its error
-- `routes`: first 20 lines of the IPv4 routing table
-- `ping`: three BR IPv6 pings and three IPv4 Internet pings
+- Per-check status badges (`ok` / `ng` / `skipped` / `not-configured`)
+- Source/target details and RTT when available
+- A summary section (`x/11 checks passed`) with success/failure guidance
 
-This is designed for interactive troubleshooting rather than machine-readable network
-telemetry.
+Current diagnostics checks (ordered):
+
+1. Tunnel state
+2. Default route to tunnel
+3. WAN `/128` alias presence
+4. CE -> BR ping
+5. Prefix update API check (live call)
+6. IPv4 internet ping (tunnel IPv4 source)
+7. IPv6 internet ping (CE source)
+8. Name resolution
+9. MTU config match
+10. MTU DF probe
+11. Large packet fragmentation test
+
+Diagnostics also updates `/var/run/ocnfixedip_prefix_update_status` so status/widget
+health remains aligned with the latest prefix-update outcome.
 
 ---
 
@@ -514,7 +532,7 @@ It intentionally does not remove:
 | Tunnel endpoint/address setup fails | Exit 1 | Partially configured `gif0` may remain |
 | Auto-assignment fails | Continue with warning | Tunnel remains usable but manual assignment is required |
 | Default route operation fails | Continue with warning | Tunnel remains up without expected default route |
-| Prefix update fails | Continue and exit 0 | Tunnel remains up; prefix registration may be stale |
+| Prefix update fails | Continue and exit 0 | Tunnel remains up; prefix registration may be stale and status health becomes degraded (`prefix_update`) |
 
 Operators should inspect the `ocnfixedip` system log after any failed or ambiguous
 Apply operation. A restart performs teardown first and is the normal recovery path.
@@ -547,11 +565,11 @@ Apply operation. A restart performs teardown first and is the normal recovery pa
 3. The algorithm is anchored to a `/56` base and is not configurable.
 4. WAN address discovery selects the first eligible IPv6 address.
 5. The plugin changes the global IPv4 default route directly.
-6. Prefix update response semantics are not validated.
+6. Prefix update still does not fail the configure transaction (it is reflected in health state instead).
 7. Configure debounce is not mutual exclusion.
 8. Configure has no transactional rollback.
 9. Teardown forgets, but does not remove, its WAN `/128` alias.
-10. Status health depends on ICMP reachability to one BR and `1.1.1.1`.
+10. Status health depends on specific probe endpoints (BR, `1.1.1.1`, `2606:4700:4700::1111`, and DNS `one.one.one.one`).
 11. Installation is file-copy based rather than a signed FreeBSD/OPNsense package.
 12. There is no automated unit or integration test suite.
 
