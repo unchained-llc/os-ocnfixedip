@@ -176,7 +176,7 @@ until the gateway, outbound NAT, and MSS normalization steps below are configure
 After enabling/applying the plugin settings, complete the following OPNsense steps or LAN clients will not have IPv4 Internet access:
 
 1. Confirm tunnel interface assignment for `gif0` in **Interfaces > Assignments** (plugin tries to auto-assign as `TUNNEL`)
-2. Create/select IPv4 gateway on that assigned tunnel interface and mark it as **Upstream** in **System > Gateways > Configuration**
+2. Create/select IPv4 gateway on that assigned tunnel interface, mark it as **Upstream**, and enable **Disable Gateway Monitoring** in **System > Gateways > Configuration**
 3. Configure outbound NAT for LAN/internal networks to the tunnel interface in **Firewall > NAT > Outbound**
 4. Add a scrub normalization rule for tunnel egress MSS in **Firewall > Settings > Normalization**:
    - Interface: `TUNNEL` (your assigned `gif0` interface)
@@ -190,7 +190,7 @@ Recommended order:
 
 1. Configure and apply this plugin (creates/configures `gif0`)
 2. Confirm `gif0` assignment (`TUNNEL`) was created (best-effort auto-assign)
-3. Configure tunnel gateway as Upstream
+3. Configure tunnel gateway as Upstream with **Disable Gateway Monitoring** enabled
 4. Add outbound NAT rules
 5. Add normalization rule (Max MSS `1420`) on tunnel `Out`
 
@@ -202,7 +202,7 @@ If auto-assignment did not happen, assign `gif0` manually in **Interfaces > Assi
 - Address family: IPv4
 - Gateway address: `192.0.0.1`
 - Upstream gateway: enabled
-- Monitoring: configure according to your operational policy
+- Disable Gateway Monitoring: enabled (required)
 
 Avoid defining two competing default IPv4 gateways unless you intentionally use an
 OPNsense gateway group or policy routing.
@@ -425,7 +425,7 @@ router-side ping alone does not verify LAN outbound NAT and firewall policy.
 ### `gif0` is up but there is no IPv4 Internet access
 
 - Verify the default route points to `192.0.0.1`.
-- Verify the TUNNEL gateway is marked **Upstream**.
+- Verify the TUNNEL gateway is marked **Upstream** and **Disable Gateway Monitoring** is enabled.
 - Check outbound NAT for every required LAN/VLAN network.
 - Check firewall rules permit LAN IPv4 traffic.
 - Add the TUNNEL outbound normalization rule with Max MSS `1420`.
