@@ -138,19 +138,20 @@ the tunnel peer.
 
 ## Installation
 
-```sh
-# on your development machine
-git clone https://github.com/unchained-llc/os-ocnfixedip
-cd os-ocnfixedip
-scp -r ./os-ocnfixedip root@<opnsense-host>:./
+Install from GitHub Releases:
 
-# on OPNsense
-sh /root/os-ocnfixedip/install.sh
+```sh
+pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.07.22/os-ocnfixedip-2026.07.22.1155.pkg
 ```
 
-The installer copies the MVC, configd, runtime script, plugin hook, and dashboard
-widget files into the local OPNsense installation. It then refreshes OPNsense plugin
-metadata, restarts `configd`, clears UI caches, and pre-creates `gif0` when possible.
+Or install a locally built package (see [Build a `.pkg` on OPNsense](#build-a-pkg-on-opnsense)):
+
+```sh
+pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-*.pkg
+```
+
+Package install hooks restart `configd`, clear OPNsense UI caches, and pre-create
+`gif0` when missing.
 
 After installation, log out of the Web UI and log back in so the new menu and ACL
 entries are loaded.
@@ -490,35 +491,88 @@ These results are a user report from one virtualized environment and are not a
 performance guarantee. Throughput depends on CPU, NIC offload behavior, virtualization,
 firewall rules, traffic shape, and the access network.
 
-## Upgrade
+## Build a `.pkg` on OPNsense
 
-To upgrade a manually installed copy:
+You can build a local FreeBSD package from this repository on OPNsense:
 
 ```sh
-# development machine
-git pull
-scp -r ./os-ocnfixedip root@<opnsense-host>:./
-
-# OPNsense
-sh /root/os-ocnfixedip/install.sh
+cd /root/os-ocnfixedip/os-ocnfixedip
+make pkg
 ```
 
-The installer overwrites plugin program files but does not remove the existing
-`//OPNsense/ocnfixedip` configuration from `/conf/config.xml`. Export a configuration
-backup before upgrading and review release changes before applying them to a remote
-router.
+Output package files are written to:
+
+- `os-ocnfixedip/dist/`
+
+Optional build parameters:
+
+```sh
+make pkg PKG_VERSION=2026.07.22.1 \
+         PKG_MAINTAINER=you@example.com \
+         PKG_ORIGIN=net/os-ocnfixedip
+```
+
+Install locally on OPNsense:
+
+```sh
+pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-*.pkg
+```
+
+Install from GitHub Releases:
+
+```sh
+pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.07.22/os-ocnfixedip-2026.07.22.1155.pkg
+```
+
+Package install hooks automatically restart `configd`, clear OPNsense UI caches,
+and pre-create `gif0` when missing.
+
+If `configctl ocnfixedip ...` returns `Action not allowed or missing`, run:
+
+```sh
+service configd restart
+```
+
+Clean build artifacts:
+
+```sh
+make clean
+```
+
+## Upgrade
+
+Upgrade by installing a newer package over the existing one:
+
+```sh
+pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.07.22/os-ocnfixedip-2026.07.22.1155.pkg
+```
+
+Or for a locally built package:
+
+```sh
+pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-*.pkg
+```
+
+If needed after upgrade, run once:
+
+```sh
+service configd restart
+```
+
+Plugin configuration under `//OPNsense/ocnfixedip` in `/conf/config.xml` is retained
+across upgrades.
 
 ## Uninstall
 
 ```sh
-sh /root/os-ocnfixedip/uninstall.sh
+pkg delete -y os-ocnfixedip
 ```
 
-Uninstallation stops and removes the plugin files and destroys `gif0`. It deliberately
-leaves the plugin configuration in `/conf/config.xml`, and it does not remove gateway,
-outbound NAT, normalization, firewall, or interface-assignment configuration created
-outside the plugin. Review and remove those entries manually when they are no longer
-needed.
+Package uninstall hooks stop the service (`configctl ocnfixedip stop`) and refresh
+runtime caches. It deliberately leaves plugin configuration in `/conf/config.xml`, and
+it does not remove gateway, outbound NAT, normalization, firewall, or interface-assignment
+configuration created outside the plugin. Review and remove those entries manually when
+they are no longer needed.
 
 ## Known Limitations
 
@@ -529,7 +583,7 @@ needed.
 - Gateway, outbound NAT, firewall, and MSS normalization are not created automatically.
 - WAN IPv6 selection uses the first non-link-local IPv6 found on the selected device.
 - Prefix update failure does not fail the configure transaction; it is reflected through status/diagnostics health state instead.
-- The installer is a local file-copy installer, not an OPNsense package repository.
+- Distribution is package-based (`.pkg` via GitHub Releases/local build), not yet an official OPNsense plugins repository feed.
 - Automated tests and an OPNsense VM integration-test workflow are not included yet.
 
 ## Security Notes
@@ -559,8 +613,8 @@ Repository structure:
 
 ```text
 os-ocnfixedip/
-  install.sh                         Local/offline installer
-  uninstall.sh                       Uninstaller
+  Makefile                           Local pkg build entrypoint (`make pkg`)
+  tools/build-pkg.sh                 FreeBSD pkg staging/manifest builder
   src/etc/inc/plugins.inc.d/         OPNsense lifecycle hooks
   src/opnsense/service/conf/         configd actions
   src/opnsense/scripts/              Tunnel runtime and diagnostics

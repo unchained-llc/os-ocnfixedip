@@ -7,3 +7,5 @@ __pycache__/
 *.har
 *.bin
 *.zip
+os-ocnfixedip/.pkgbuild/
+os-ocnfixedip/dist/

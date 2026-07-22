@@ -263,8 +263,8 @@ Additional integration files:
 - `os-ocnfixedip/src/opnsense/mvc/app/controllers/OPNsense/OCNFixedIP/Api/ServiceController.php`
 - `os-ocnfixedip/src/opnsense/mvc/app/models/OPNsense/OCNFixedIP/OCNFixedIP.xml`
 - `os-ocnfixedip/src/opnsense/www/js/widgets/OCNFixedIP.js`
-- `os-ocnfixedip/install.sh`
-- `os-ocnfixedip/uninstall.sh`
+- `os-ocnfixedip/Makefile`
+- `os-ocnfixedip/tools/build-pkg.sh`
 
 ---
 
@@ -500,18 +500,21 @@ health remains aligned with the latest prefix-update outcome.
 
 ## 15. Installation and Removal
 
-The installer is local/offline and copies repository files into the live OPNsense
-filesystem. It validates that it is running on OPNsense, copies all MVC and runtime
-components, removes legacy DSLite artifacts, runs `opnsense-patch`, restarts `configd`,
-clears OPNsense caches, and pre-creates `gif0` when possible.
+Installation/removal is package-based using FreeBSD `pkg`.
 
-The uninstaller:
+Install:
 
-1. Stops the service through configd.
-2. Removes installed plugin files.
-3. Destroys `gif0` if present.
-4. Refreshes OPNsense metadata and restarts configd.
-5. Clears caches and legacy temporary configuration files.
+- `pkg add -f <os-ocnfixedip-*.pkg>`
+
+Uninstall:
+
+- `pkg delete -y os-ocnfixedip`
+
+Embedded package lifecycle hooks:
+
+1. `post-install`: restarts `configd`, clears OPNsense UI caches, pre-creates `gif0` if missing.
+2. `pre-deinstall`: runs `configctl ocnfixedip stop` (best-effort).
+3. `post-deinstall`: restarts `configd` and clears OPNsense UI caches.
 
 It intentionally does not remove:
 
@@ -575,7 +578,7 @@ Apply operation. A restart performs teardown first and is the normal recovery pa
 8. Configure has no transactional rollback.
 9. Teardown forgets, but does not remove, its WAN `/128` alias.
 10. Status health depends on specific probe endpoints (BR, `1.1.1.1`, `2606:4700:4700::1111`, and DNS `one.one.one.one`).
-11. Installation is file-copy based rather than a signed FreeBSD/OPNsense package.
+11. Distribution is package-based (`.pkg`) but not yet integrated into the official OPNsense plugins repository feed.
 12. There is no automated unit or integration test suite.
 
 ---
@@ -587,8 +590,7 @@ Apply operation. A restart performs teardown first and is the normal recovery pa
 Run shell syntax validation for every shell entry point:
 
 ```sh
-for file in os-ocnfixedip/install.sh \
-            os-ocnfixedip/uninstall.sh \
+for file in os-ocnfixedip/tools/build-pkg.sh \
             os-ocnfixedip/src/opnsense/scripts/OPNsense/ocnfixedip/*.sh; do
     sh -n "$file" || exit 1
 done
@@ -597,7 +599,46 @@ done
 Also validate XML and PHP with tools available in the target OPNsense development
 environment.
 
-### 19.2 OPNsense VM test matrix
+### 19.2 Local package build on OPNsense
+
+This repository includes a local package build path:
+
+```sh
+cd /root/os-ocnfixedip/os-ocnfixedip
+make pkg
+```
+
+Build output:
+
+- `os-ocnfixedip/dist/*.pkg`
+
+Install locally on OPNsense:
+
+```sh
+pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-*.pkg
+```
+
+The generated package embeds lifecycle hooks:
+
+- post-install: restart `configd`, clear OPNsense UI caches, pre-create `gif0` if missing
+- pre-deinstall: `configctl ocnfixedip stop`
+- post-deinstall: restart `configd`, clear OPNsense UI caches
+
+Supported make variables:
+
+- `PKG_VERSION`
+- `PKG_MAINTAINER`
+- `PKG_WWW`
+- `PKG_ORIGIN`
+
+Clean build artifacts:
+
+```sh
+make clean
+```
+
+
+### 19.3 OPNsense VM test matrix
 
 At minimum, exercise these paths on a disposable OPNsense VM or lab router:
 
@@ -614,7 +655,7 @@ At minimum, exercise these paths on a disposable OPNsense VM or lab router:
 11. Dashboard and Diagnostics rendering.
 12. Uninstall followed by inspection for residual configuration and aliases.
 
-### 19.3 Change discipline
+### 19.4 Change discipline
 
 - Keep README user guidance and this implementation reference consistent.
 - Do not document behavior as guaranteed until it exists in the runtime scripts.
