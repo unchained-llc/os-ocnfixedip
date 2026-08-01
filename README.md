@@ -1,5 +1,7 @@
 # OCN Fixed IP (IPoE) Plugin for OPNsense
 
+[English](./README.md) | [日本語](./README_ja.md)
+
 This is an OPNsense plugin dedicated to **OCN Fixed IP (IPoE)** (IPv4 over IPv6 / IPIP).
 It is focused on OCN fixed IP operation only.
 
