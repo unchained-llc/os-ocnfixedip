@@ -180,13 +180,13 @@ After enabling/applying the plugin settings, complete the following OPNsense ste
 1. Confirm tunnel interface assignment for `gif0` in **Interfaces > Assignments** (plugin tries to auto-assign as `TUNNEL`)
 2. Create/select IPv4 gateway on that assigned tunnel interface, mark it as **Upstream**, and enable **Disable Gateway Monitoring** in **System > Gateways > Configuration**
 3. Configure outbound NAT for LAN/internal networks to the tunnel interface in **Firewall > NAT > Outbound**
-4. Add a scrub normalization rule for tunnel egress MSS in **Firewall > Settings > Normalization**:
+4. Add a scrub normalization rule for tunnel MSS in **Firewall > Settings > Normalization**:
    - Interface: `TUNNEL` (your assigned `gif0` interface)
-   - Direction: `Out`
+   - Direction: `Any`
    - Protocol: `TCP`
    - Source/Destination: `any`
    - Max MSS: `1420`
-   - Example description: `OCN IPoE out`
+   - Example description: `OCN IPoE MSS`
 
 Recommended order:
 
@@ -194,7 +194,7 @@ Recommended order:
 2. Confirm `gif0` assignment (`TUNNEL`) was created (best-effort auto-assign)
 3. Configure tunnel gateway as Upstream with **Disable Gateway Monitoring** enabled
 4. Add outbound NAT rules
-5. Add normalization rule (Max MSS `1420`) on tunnel `Out`
+5. Add a normalization rule (Max MSS `1420`) on the tunnel with Direction `Any`
 
 If auto-assignment did not happen, assign `gif0` manually in **Interfaces > Assignments** and apply once more.
 
@@ -430,7 +430,7 @@ router-side ping alone does not verify LAN outbound NAT and firewall policy.
 - Verify the TUNNEL gateway is marked **Upstream** and **Disable Gateway Monitoring** is enabled.
 - Check outbound NAT for every required LAN/VLAN network.
 - Check firewall rules permit LAN IPv4 traffic.
-- Add the TUNNEL outbound normalization rule with Max MSS `1420`.
+- Add the TUNNEL normalization rule with Direction `Any` and Max MSS `1420`.
 - Use the Diagnostics page to identify which specific check is failing (route, alias, BR, IPv4/IPv6 internet, DNS A/AAAA, curl v4/v6, MTU including IPv6 fragmentation, or prefix update).
 
 ### BR ping fails

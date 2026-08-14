@@ -71,7 +71,7 @@ service configd restart
 3. Gateway 設定で **Upstream** を有効化
 4. Gateway 設定で **Disable Gateway Monitoring** を有効化（必須）
 5. Outbound NAT を `TUNNEL` 向けに設定
-6. Normalization に `TUNNEL / Out / TCP / Max MSS 1420` を追加
+6. Normalization に `TUNNEL / Any / TCP / Max MSS 1420` を追加
 
 ### 推奨 Gateway 設定
 
@@ -80,6 +80,17 @@ service configd restart
 - Gateway address: `192.0.0.1`
 - Upstream gateway: enabled
 - **Disable Gateway Monitoring: enabled (required)**
+
+### 推奨 Normalization 設定
+
+外部からの接続を含めて正常に通信するため、以下のNormalizationルールを1つ作成してください:
+
+- Interface: `TUNNEL`
+- Direction: `Any`
+- Protocol: `TCP`
+- Source/Destination: `any`
+- Max MSS: `1420`
+- Description例: `OCN IPoE MSS`
 
 ## 動作確認
 
