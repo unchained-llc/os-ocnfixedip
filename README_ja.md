@@ -117,25 +117,27 @@ OCN の開通案内や契約者向け画面から、次の情報を確認して�
 | Auth User ID | 契約ごとの値 | Prefix Update の認証ユーザーID |
 | Auth Password | 契約ごとの値 | Prefix Update の認証パスワード |
 
-現在のIPv4デフォルトルートを記録し、OPNsense の設定をエクスポートしてください。また、既存の `gif0` を他のサービスで使用していないことを確認します。所有記録と一致しない設定済み `gif0` がある場合は、上書きせず設定を失敗として返します。インストール時に事前作成された空の `gif0` は使用できます。
+現在のIPv4デフォルトルートを記録し、OPNsense の設定をエクスポートしてください。また、既存の `gif0` を他のサービスで使用していないことを確認します。所有記録がない場合でも、BR・固定IPv4・対向IPv4・IPv6計算式が契約設定と一致する復元済みトンネルは再利用します。それ以外の設定済み `gif0` は上書きしません。インストール時に事前作成された空の `gif0` は使用できます。
 
 ## インストール
 
 ### GitHub Releases から導入
 
-以下はリポジトリに記載されている `v2026.07.22` の例です。最新版を示すものではありません。導入するバージョンとファイル名は [Releases](https://github.com/unchained-llc/os-ocnfixedip/releases) で確認してください。
+[リリース `v2026.10.28`](https://github.com/unchained-llc/os-ocnfixedip/releases/tag/v2026.10.28) の導入例です。配布pkgの対象は **FreeBSD 15 / amd64** です。それ以外の環境では、対象のOPNsense上でローカルビルドしてください。
 
 ```sh
-pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.07.22/os-ocnfixedip-2026.07.22.1155.pkg
+pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.10.28/os-ocnfixedip-2026.10.28.pkg
 ```
 
 ### ローカルでビルドしたパッケージを導入
 
-ローカルでビルドしたパッケージを導入します。
+ローカルでビルドしたパッケージを、バージョンを指定して導入します。以下は修正版 `2026.10.28` の例です。
 
 ```sh
-pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-*.pkg
+pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-2026.10.28.pkg
 ```
+
+`dist/` には複数バージョンが残ることがあるため、ワイルドカードは使わず、導入するファイルを1つ指定してください。別のバージョンを導入する場合は、ファイル名のバージョンを置き換えます。
 
 インストールフックは `configd` の再起動、OPNsense UIキャッシュの削除、存在しない場合の `gif0` 作成を行います。メニューとACLを読み込み直すため、Web UIを一度ログアウトして再ログインしてください。
 
@@ -268,11 +270,13 @@ Prefix Update APIは、サービス起動・再起動・Apply、および `rc.ne
 
 IPv4デフォルトルートを `192.0.0.1` に変更します。変更に失敗した場合は削除・追加を試みます。経路操作の失敗は警告として記録されます。
 
-また、システム全体の `net.inet.tcp.mss_ifmtu` の元の値を保存して `1` にし、停止時に保存値へ戻します。再起動を挟んでも元の値を保持します。
+`net.inet.tcp.mss_ifmtu` が存在するカーネルでは元の値を保存して `1` にし、停止時に戻します。FreeBSD 15など、このOIDが存在しない環境では処理を続行し、管理者が設定したファイアウォールのMSS正規化を使用します。
 
 ### 無効化・停止・再起動
 
 停止処理は `gif0` を破棄し、現在のIPv4デフォルトルートが `gif0` を使っている場合に限り、そのルートを削除します。以前のゲートウェイは保存・復元しません。その後の経路は OPNsense 側のゲートウェイ管理状態に依存します。
+
+再起動で `/var/run` の記録が消えた場合も、契約設定と一致するOPNsense復元済みトンネルを認識して再設定します。
 
 停止時はプラグインが所有するWAN `/128` エイリアスを削除してから記録を消します。削除に失敗した場合は、次回に再試行できるよう記録を残し、失敗を返します。
 
@@ -471,17 +475,17 @@ make pkg
 ビルド情報を指定する例:
 
 ```sh
-make pkg PKG_VERSION=2026.07.22.1 \
+make pkg PKG_VERSION=2026.10.28 \
          PKG_MAINTAINER=you@example.com \
          PKG_ORIGIN=net/os-ocnfixedip
 ```
 
-`PKG_WWW` も指定できます。バージョンを省略した場合はビルド日時から生成されます。
+`PKG_WWW` も指定できます。バージョンを省略した場合はビルド日付から生成されます。
 
 ローカルパッケージをインストールします。
 
 ```sh
-pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-*.pkg
+pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-2026.10.28.pkg
 ```
 
 ビルド用の一時ディレクトリと生成パッケージを削除する場合:
@@ -495,7 +499,7 @@ make clean
 導入するバージョンのパッケージを、既存のものへ上書きインストールします。以下は既存リリースのコマンド例です。アップグレード時は新しいリリースのURLへ置き換えてください。
 
 ```sh
-pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.07.22/os-ocnfixedip-2026.07.22.1155.pkg
+pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.10.28/os-ocnfixedip-2026.10.28.pkg
 ```
 
 ローカルパッケージなら、ビルド節の `pkg add -f` と同じ方法を使用します。先に `pkg delete` すると停止処理が実行されるため、再インストールでも上書き導入を推奨します。ただし、上書き時の無停止動作を保証するものではありません。
@@ -528,7 +532,7 @@ pkg delete -y os-ocnfixedip
 - 失敗時の復元はベストエフォートです。OPNsenseへ書き込んだインターフェース割り当ては残り、ネットワーク状態の復元自体が失敗する場合もあります。
 - Prefix Updateの失敗は、トンネル設定の失敗とは区別して警告とヘルス状態へ反映します。
 - ヘルス判定は特定の外部宛先への疎通に依存します。
-- 設定・診断・ウィジェットはOPNsenseの表示言語に従って日本語を表示します。アドレスや内部の診断キーは共通表記です。
+- 日本語対応はドキュメントのみです。設定・診断・ウィジェットに独自の日本語翻訳や表示言語の切り替え処理はありません。
 - 配布はGitHub Releasesまたはローカルビルドの `.pkg` で、公式OPNsenseプラグインリポジトリには未登録です。
 - 自動回帰テストと構文検査を含みます。実回線・OPNsense VMの統合試験は別途必要です。
 

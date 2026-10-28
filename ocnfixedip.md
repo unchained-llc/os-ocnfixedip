@@ -130,7 +130,7 @@ was already lost cannot safely be identified as owned.
 
 - Default tunnel MTU: `1460`
 - Allowed model range: `1280` through `9000`
-- Runtime saves `net.inet.tcp.mss_ifmtu` and sets it to `1`; stop restores the saved value
+- When available, runtime saves `net.inet.tcp.mss_ifmtu` and sets it to `1`; stop restores it. Missing OIDs (including FreeBSD 15) are optional and never block configure/stop.
 - Recommended outbound scrub Max MSS: `1420`
 
 The scrub rule is not created by the plugin and must be configured on the assigned
@@ -252,9 +252,9 @@ failure phase and prefix-update warnings are displayed explicitly. Status health
 failures are shown separately from overall connectivity.
 
 Diagnostics runs immediately on load via POST (normal OPNsense CSRF protection).
-All diagnostic data is JSON serialized and HTML escaped. A plugin-scoped translation
-module uses the authenticated UI language for Japanese settings, help, diagnostics
-and widget text; it does not modify core translation catalogs.
+All diagnostic data is JSON serialized and HTML escaped. Plugin UI messages are
+English. Japanese support is limited to documentation; no plugin-local translation
+module or DOM localization pass is included.
 
 ---
 
@@ -374,7 +374,7 @@ continues.
 3. Check prerequisites and validate update URL, credentials, hostname and tunnel values.
 4. Discover a stable WAN IPv6 with retries and calculate the local address.
 5. Snapshot the previous tunnel, gateway, alias ownership and sysctl state.
-6. Reject a configured `gif0` that does not match the plugin's tracked local address.
+6. Accept a tracked tunnel or an OPNsense-restored tunnel matching the BR, IPv4/peer and local IPv6 formula; reject unrelated configured GIFs.
 7. For restart, stop only after preflight succeeds.
 8. Replace the managed WAN alias and persist its device/address/ownership.
 9. Create/configure `gif0`, MTU and MSS sysctl; bring it up.
@@ -404,6 +404,10 @@ commands may themselves fail. Keep console access available.
 
 Locks use `fcntl.flock`; lock files are never unlinked while processes may wait on
 them. Kernel ownership is released on process exit, so stale PID files are not used.
+After reboot, volatile ownership state is absent. `tunnel_matches_config()` recognizes
+OPNsense-restored GIFs by contract addresses and the derived local IPv6 formula; this
+does not claim unrelated WAN aliases.
+
 The former three-second debounce stamp is unused. Explicit restart and disabled
 Apply are always processed after acquiring the runtime lock.
 
@@ -510,7 +514,7 @@ Installation/removal is package-based using FreeBSD `pkg`.
 
 Install:
 
-- `pkg add -f <os-ocnfixedip-*.pkg>`
+- `pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-2026.10.28.pkg`
 
 Uninstall:
 
@@ -626,10 +630,10 @@ Build output:
 
 - `os-ocnfixedip/dist/*.pkg`
 
-Install locally on OPNsense:
+Install locally on OPNsense (select one explicit version; do not use a wildcard):
 
 ```sh
-pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-*.pkg
+pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-2026.10.28.pkg
 ```
 
 The generated package embeds lifecycle hooks:

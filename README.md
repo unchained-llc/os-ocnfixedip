@@ -146,18 +146,25 @@ the tunnel peer.
 
 ## Installation
 
-Install from GitHub Releases (the command below is the documented `v2026.07.22`
-example; select the intended version from [Releases](https://github.com/unchained-llc/os-ocnfixedip/releases)):
+Install version `2026.10.28` from [GitHub Releases](https://github.com/unchained-llc/os-ocnfixedip/releases/tag/v2026.10.28).
+The prebuilt package targets **FreeBSD 15 / amd64**. For other platforms, build the
+package locally on the target OPNsense system.
+
+Install the prebuilt package:
 
 ```sh
-pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.07.22/os-ocnfixedip-2026.07.22.1155.pkg
+pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.10.28/os-ocnfixedip-2026.10.28.pkg
 ```
 
 Or install a locally built package (see [Build a `.pkg` on OPNsense](#build-a-pkg-on-opnsense)):
 
 ```sh
-pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-*.pkg
+pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-2026.10.28.pkg
 ```
+
+The local example selects version `2026.10.28`. Replace the version with the
+package you intend to install, and specify exactly one file. Do not use a wildcard:
+`dist/` can contain multiple versions.
 
 Package install hooks restart `configd`, clear OPNsense UI caches, and pre-create
 `gif0` when missing.
@@ -321,11 +328,14 @@ to its own gateway management state.
 The alias state records the device, address and ownership flag. Stop removes only
 plugin-owned `/128` aliases and retains the record if deletion fails. A matching
 pre-existing address is preserved. WAN changes clean the recorded old device.
-Legacy one-address state is migrated against the configured WAN; already-orphaned
+OPNsense-restored tunnels matching the contract are recognized after reboot, when
+`/var/run` ownership records are absent. Legacy one-address state is migrated against
+the configured WAN; already-orphaned
 aliases from old versions may still need manual cleanup.
 
-Configure saves the original `net.inet.tcp.mss_ifmtu` value before setting it to `1`;
-stop restores that saved value, including across restarts.
+Configure saves and enables `net.inet.tcp.mss_ifmtu` only when the kernel exposes
+that optional OID; stop restores its saved value. FreeBSD 15 kernels without the OID
+continue without it and use the administrator-configured firewall MSS normalization.
 
 ### Connectivity and health checks (status/diagnostics)
 
@@ -535,7 +545,7 @@ Output package files are written to:
 Optional build parameters:
 
 ```sh
-make pkg PKG_VERSION=2026.07.22.1 \
+make pkg PKG_VERSION=2026.10.28 \
          PKG_MAINTAINER=you@example.com \
          PKG_ORIGIN=net/os-ocnfixedip
 ```
@@ -543,13 +553,13 @@ make pkg PKG_VERSION=2026.07.22.1 \
 Install locally on OPNsense:
 
 ```sh
-pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-*.pkg
+pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-2026.10.28.pkg
 ```
 
 Install from GitHub Releases:
 
 ```sh
-pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.07.22/os-ocnfixedip-2026.07.22.1155.pkg
+pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.10.28/os-ocnfixedip-2026.10.28.pkg
 ```
 
 Package install hooks automatically restart `configd`, clear OPNsense UI caches,
@@ -572,13 +582,13 @@ make clean
 Upgrade by installing a newer package over the existing one:
 
 ```sh
-pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.07.22/os-ocnfixedip-2026.07.22.1155.pkg
+pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.10.28/os-ocnfixedip-2026.10.28.pkg
 ```
 
 Or for a locally built package:
 
 ```sh
-pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-*.pkg
+pkg add -f /root/os-ocnfixedip/dist/os-ocnfixedip-2026.10.28.pkg
 ```
 
 If needed after upgrade, run once:
@@ -607,8 +617,9 @@ may need manual cleanup. Review unneeded settings with an alternative IPv4 route
 
 - OCN Fixed IP (IPoE) only; this is not a generic DS-Lite or MAP-E implementation.
 - One hard-coded tunnel interface, `gif0`, and one fixed peer IPv4, `192.0.0.1`.
-  A configured `gif0` without matching plugin ownership state is rejected. An empty
-  pre-created `gif0` can be used for initial setup.
+  After reboot, a restored GIF matching the configured BR, IPv4/peer and local address
+  formula can be adopted even without volatile ownership state. Other configured
+  tunnels are rejected; an empty pre-created `gif0` can be used for initial setup.
 - The local tunnel address calculation intentionally assumes an OCN `/56` base.
 - Applying the service directly changes the system IPv4 default route.
 - Gateway, outbound NAT, firewall, and MSS normalization are not created automatically.
@@ -672,8 +683,8 @@ before changing the installation. The distribution includes the [BSD license](./
 
 Exercise configure, restart, IPv6 prefix renewal, disable and uninstall on a disposable
 OPNsense VM before release. Mock tests do not verify FreeBSD networking or OCN service
-compatibility. Japanese settings/diagnostics/widget messages follow the authenticated
-OPNsense UI language through a plugin-scoped translation module.
+compatibility. Japanese support is limited to documentation; the plugin does not
+include a Japanese UI translation module.
 
 ---
 
