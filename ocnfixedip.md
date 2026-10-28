@@ -152,7 +152,8 @@ Typical responses:
 Request behavior:
 
 - Forces IPv6 transport with `curl -6`
-- Uses `--connect-timeout 2` to avoid long hangs on unreachable endpoints
+- Uses `--connect-timeout 2` for the connection phase only; there is no overall
+  transfer timeout, so a stalled response can still hold configure or diagnostics open
 - Uses a temporary mode-`0600` netrc file
 - Appends `hostname=` only when a hostname is configured and the URL does not already
   contain that parameter
@@ -312,8 +313,9 @@ For this fork, preferred naming is:
 - plugin directory: `os-ocnfixedip`
 - UI name: `OCN Fixed IP (IPoE)`
 
-Legacy `DSLite` files are removed by the installer. New code and documentation should
-not reintroduce the former `dslite` namespace.
+The current package hooks do not remove legacy `DSLite` files. Inspect and remove
+obsolete files from earlier manual installations separately. New code and documentation
+should not reintroduce the former `dslite` namespace.
 
 ---
 
