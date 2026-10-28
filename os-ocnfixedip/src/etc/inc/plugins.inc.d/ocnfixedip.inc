@@ -33,6 +33,11 @@ function ocnfixedip_configure_do($verbose = false, $interfaces = null, $family =
         return;
     }
 
+    $model = new \OPNsense\OCNFixedIP\OCNFixedIP();
+    if (is_array($interfaces) && !empty($interfaces) && !in_array((string)$model->wan_interface, $interfaces, true)) {
+        return;
+    }
+
     service_log('Configuring OCN Fixed IP (IPoE) tunnel...', $verbose);
     configd_run('ocnfixedip configure');
     service_log("done.\n", $verbose);

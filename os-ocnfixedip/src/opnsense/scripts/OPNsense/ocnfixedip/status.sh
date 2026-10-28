@@ -5,6 +5,9 @@
 SCRIPT_DIR=$(dirname "$0")
 . "${SCRIPT_DIR}/lib.sh"
 
+if [ "${1:-}" != "--uncached" ]; then
+    exec python3 "${SCRIPT_DIR}/runtime.py" cached-status "${STATUS_CACHE}" /bin/sh "$0" --uncached
+fi
 get_config
 
 append_failure() {
@@ -16,10 +19,10 @@ append_failure() {
     fi
 }
 
-if tunnel_exists; then
+if [ "${OCNFIXEDIP_ENABLED}" = "1" ] && tunnel_exists; then
     ifdata=$(ifconfig "${TUNNEL_IF}" 2>/dev/null)
     status="down"
-    echo "${ifdata}" | grep -q "RUNNING" && status="up"
+    echo "${ifdata}" | grep -Eq "RUNNING|LOWER_UP" && status="up"
 
     local_v6=$(echo "${ifdata}" | awk '/tunnel inet6/ {print $3}')
     remote_v6=$(echo "${ifdata}" | awk '/tunnel inet6/ {print $5}')
@@ -35,7 +38,8 @@ if tunnel_exists; then
     br_v6_target="${FIXEDIP_AFTR:-${remote_v6}}"
     ce_source="${local_v6}"
     if [ -z "${ce_source}" ] && [ -f /var/run/ocnfixedip_local_tunnel_v6 ]; then
-        ce_source=$(cat /var/run/ocnfixedip_local_tunnel_v6 2>/dev/null)
+        read_alias_state
+        ce_source="${ALIAS_V6}"
     fi
 
     # 1) Tunnel state
@@ -105,34 +109,29 @@ if tunnel_exists; then
         append_failure "mtu_probe"
         append_failure "mtu_fragmentation"
     else
-        # 7) BR ping from CE address
+        # A BR that filters ICMP must not suppress the independent IPv4 probe.
         if [ -z "${br_v6_target}" ]; then
-            connectivity="no internet"
             reason="BR endpoint is not configured"
             append_failure "ce_to_br"
         elif [ -z "${ce_source}" ]; then
-            connectivity="no internet"
             reason="CE source IPv6 is unavailable"
             append_failure "ce_to_br"
-        elif ping -6 -c 1 -W 2 -S "${ce_source}" "${br_v6_target}" >/dev/null 2>&1; then
-            # 8) Internet IPv4 ping from tunnel IPv4
-            if ping -c 1 -W 2 -S "${ipv4}" 1.1.1.1 >/dev/null 2>&1; then
-                connectivity="connected"
-            else
-                connectivity="no internet"
-                reason="BR reachable from CE (${ce_source} -> ${br_v6_target}), but Internet ping failed (1.1.1.1)"
-                append_failure "internet"
-            fi
+        elif ! ping -6 -c 1 -W 2000 -t 3 -S "${ce_source}" "${br_v6_target}" >/dev/null 2>&1; then
+            reason="BR is unreachable from CE"
+            append_failure "ce_to_br"
+        fi
+
+        if ping -c 1 -W 2000 -t 3 -S "${ipv4}" 1.1.1.1 >/dev/null 2>&1; then
+            connectivity="connected"
         else
             connectivity="no internet"
-            reason="BR unreachable from CE (${ce_source} -> ${br_v6_target})"
-            append_failure "ce_to_br"
+            reason="IPv4 Internet ping failed"
             append_failure "internet"
         fi
 
         # 9) IPv6 internet ping from CE source
         if [ -n "${ce_source}" ]; then
-            if ! ping -6 -c 1 -W 2 -S "${ce_source}" 2606:4700:4700::1111 >/dev/null 2>&1; then
+            if ! ping -6 -c 1 -W 2000 -t 3 -S "${ce_source}" 2606:4700:4700::1111 >/dev/null 2>&1; then
                 append_failure "ipv6_internet"
             fi
         else
@@ -143,7 +142,7 @@ if tunnel_exists; then
         if [ -n "${mtu_val}" ] && [ "${mtu_val}" -ge 1280 ] 2>/dev/null; then
             mtu_probe_payload=$(( mtu_val - 28 ))
             if [ "${mtu_probe_payload}" -gt 0 ] 2>/dev/null; then
-                ping -D -c 1 -W 2 -S "${ipv4}" -s "${mtu_probe_payload}" 1.1.1.1 >/dev/null 2>&1 || append_failure "mtu_probe"
+                ping -D -c 1 -W 2000 -t 3 -S "${ipv4}" -s "${mtu_probe_payload}" 1.1.1.1 >/dev/null 2>&1 || append_failure "mtu_probe"
             else
                 append_failure "mtu_probe"
             fi
@@ -151,7 +150,7 @@ if tunnel_exists; then
             # 11) Large packet fragmentation test (DF off)
             mtu_frag_payload=$(( mtu_val + 100 - 28 ))
             if [ "${mtu_frag_payload}" -gt 0 ] 2>/dev/null; then
-                ping -c 1 -W 2 -S "${ipv4}" -s "${mtu_frag_payload}" 1.1.1.1 >/dev/null 2>&1 || append_failure "mtu_fragmentation"
+                ping -c 1 -W 2000 -t 3 -S "${ipv4}" -s "${mtu_frag_payload}" 1.1.1.1 >/dev/null 2>&1 || append_failure "mtu_fragmentation"
             else
                 append_failure "mtu_fragmentation"
             fi
@@ -167,13 +166,13 @@ if tunnel_exists; then
         health="degraded"
     fi
 
-    printf '{"tunnel":{"status":"%s","connectivity":"%s","health":"%s","health_failures":"%s","local_v6":"%s","aftr":"%s","ipv4":"%s","mtu":"%s","interface":"%s","reason":"%s"}}' \
+    render_json '{"tunnel":{"status":"%s","connectivity":"%s","health":"%s","health_failures":"%s","local_v6":"%s","aftr":"%s","ipv4":"%s","mtu":"%s","interface":"%s","reason":"%s"}}' \
         "${status}" "${connectivity}" "${health}" "${health_failures}" "${local_v6}" "${remote_v6}" "${ipv4}" "${mtu_val}" "${TUNNEL_IF}" "${reason}"
 else
     get_config
     if [ "${OCNFIXEDIP_ENABLED}" = "1" ]; then
-        printf '{"tunnel":{"status":"not configured","connectivity":"offline","health":"offline","health_failures":"tunnel_state","local_v6":"-","aftr":"-","ipv4":"-","mtu":"-","interface":"%s","reason":"Not started - click Apply"}}' "${TUNNEL_IF}"
+        render_json '{"tunnel":{"status":"not configured","connectivity":"offline","health":"offline","health_failures":"tunnel_state","local_v6":"-","aftr":"-","ipv4":"-","mtu":"-","interface":"%s","reason":"Not started - click Apply"}}' "${TUNNEL_IF}"
     else
-        printf '{"tunnel":{"status":"disabled","connectivity":"offline","health":"offline","health_failures":"","local_v6":"-","aftr":"-","ipv4":"-","mtu":"-","interface":"%s","reason":"Service is disabled"}}' "${TUNNEL_IF}"
+        render_json '{"tunnel":{"status":"disabled","connectivity":"offline","health":"offline","health_failures":"","local_v6":"-","aftr":"-","ipv4":"-","mtu":"-","interface":"%s","reason":"Service is disabled"}}' "${TUNNEL_IF}"
     fi
 fi

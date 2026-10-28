@@ -38,9 +38,11 @@ class ServiceController extends ApiMutableServiceControllerBase
         }
 
         $backend = new Backend();
-        $backend->configdRun('ocnfixedip configure');
-
-        return ['result' => 'ok'];
+        $response = json_decode($backend->configdRun('ocnfixedip configure'), true);
+        if (!is_array($response) || !in_array($response['result'] ?? '', ['ok', 'failed'], true)) {
+            return ['result' => 'failed', 'phase' => 'backend'];
+        }
+        return $response;
     }
 
     public function statusAction()
@@ -52,6 +54,9 @@ class ServiceController extends ApiMutableServiceControllerBase
 
     public function diagnosticsAction()
     {
+        if (!$this->request->isPost()) {
+            return ['error' => 'POST required'];
+        }
         $backend = new Backend();
         $response = $backend->configdRun('ocnfixedip diagnostics');
         return json_decode($response, true) ?? ['error' => 'failed to run diagnostics'];

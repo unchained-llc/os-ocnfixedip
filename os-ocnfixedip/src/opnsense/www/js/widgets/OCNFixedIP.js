@@ -47,25 +47,27 @@ export default class OCNFixedIP extends BaseTableWidget {
         try {
             response = await this.ajaxCall('/api/ocnfixedip/service/status');
         } catch (e) {
-            this.displayError(this.translations.unconfigured);
+            this.displayError('Status request failed.');
             return;
         }
 
         if (!response || !response.tunnel) {
-            this.displayError(this.translations.unconfigured);
+            this.displayError('Status request failed.');
             return;
         }
 
         const t = response.tunnel;
 
         if (t.status === 'disabled') {
-            this.displayError(this.translations.disabled);
+            this.displayError('OCN Fixed IP (IPoE) tunnel is disabled.');
             return;
         }
 
-        if (!this.dataChanged('ocnfixedip-status', t)) {
+        const changed = this.dataChanged('ocnfixedip-status', t);
+        if (!changed && !this._renderFailed) {
             return;
         }
+        this._renderFailed = false;
 
         let statusIcon, statusText, statusClass;
         if (t.status === 'up' && t.health === 'healthy') {
@@ -74,23 +76,23 @@ export default class OCNFixedIP extends BaseTableWidget {
             statusClass = 'text-success';
         } else if (t.status === 'up' && t.connectivity === 'connected') {
             statusIcon = 'fa-check-circle text-success';
-            statusText = this.translations.connected + ' (degraded)';
+            statusText = 'Connected (degraded)';
             statusClass = 'text-warning';
         } else if (t.status === 'up' && t.connectivity === 'no internet') {
             statusIcon = 'fa-exclamation-circle text-warning';
-            statusText = this.translations.nointernet;
+            statusText = 'No Internet';
             statusClass = 'text-warning';
         } else if (t.status === 'up') {
             statusIcon = 'fa-circle text-success';
-            statusText = this.translations.tunnelup;
+            statusText = 'Tunnel Up';
             statusClass = 'text-success';
         } else {
             statusIcon = 'fa-circle text-danger';
-            statusText = t.reason || this.translations.tunneldown;
+            statusText = t.reason || 'Tunnel Down';
             statusClass = 'text-danger';
         }
 
-        const statusLabel = `<a href="/ui/ocnfixedip/diagnostics" class="${statusClass}" title="Open diagnostics"><b>${statusText}</b></a>`;
+        const statusLabel = `<a href="/ui/ocnfixedip/diagnostics" class="${statusClass}" title="${this._esc('Open diagnostics')}"><b>${this._esc(statusText)}</b></a>`;
 
         let statusRow = `
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -102,14 +104,14 @@ export default class OCNFixedIP extends BaseTableWidget {
         if (t.status === 'up') {
             let failures = '';
             if (t.health && t.health !== 'healthy' && t.health_failures) {
-                failures = `<div><small class="text-warning"><b>Health failures:</b> ${this._esc(t.health_failures)}</small></div>`;
+                failures = `<div><small class="text-warning"><b>${this._esc('Health failures')}:</b> ${this._esc(t.health_failures)}</small></div>`;
             }
             detailsRow = `
                 <div style="padding: 4px 0;">
-                    <div><small><b>${this.translations.localv6}:</b> ${this._esc(t.local_v6 || '-')}</small></div>
-                    <div><small><b>${this.translations.aftr}:</b> ${this._esc(t.aftr || '-')}</small></div>
-                    <div><small><b>${this.translations.ipv4}:</b> ${this._esc(t.ipv4 || '-')}</small></div>
-                    <div><small><b>${this.translations.mtu}:</b> ${this._esc(t.mtu || '-')}</small></div>
+                    <div><small><b>${'Local IPv6'}:</b> ${this._esc(t.local_v6 || '-')}</small></div>
+                    <div><small><b>${'BR IPv6'}:</b> ${this._esc(t.aftr || '-')}</small></div>
+                    <div><small><b>${'IPv4'}:</b> ${this._esc(t.ipv4 || '-')}</small></div>
+                    <div><small><b>${'MTU'}:</b> ${this._esc(t.mtu || '-')}</small></div>
                     ${failures}
                 </div>`;
         } else if (t.reason) {
@@ -123,8 +125,9 @@ export default class OCNFixedIP extends BaseTableWidget {
     }
 
     displayError(message) {
+        this._renderFailed = true;
         $('#ocnfixedipStatusTable').empty().append(
-            $(`<div class="error-message"><a href="/ui/ocnfixedip/general">${message}</a></div>`)
+            $(`<div class="error-message"><a href="/ui/ocnfixedip/general">${this._esc(message)}</a></div>`)
         );
     }
 }

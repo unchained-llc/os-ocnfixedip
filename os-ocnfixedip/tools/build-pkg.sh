@@ -10,7 +10,7 @@ PROJECT_ROOT=$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)
 SRC_DIR="${PROJECT_ROOT}/src"
 
 PKG_NAME="${PKG_NAME:-os-ocnfixedip}"
-PKG_VERSION="${PKG_VERSION:-$(date +%Y.%m.%d.%H%M)}"
+PKG_VERSION="${PKG_VERSION:-$(date +%Y.%m.%d)}"
 PKG_MAINTAINER="${PKG_MAINTAINER:-you@example.invalid}"
 PKG_WWW="${PKG_WWW:-https://github.com/unchained-llc/os-ocnfixedip}"
 PKG_ORIGIN="${PKG_ORIGIN:-net/os-ocnfixedip}"
@@ -32,10 +32,12 @@ fi
 
 rm -rf "${WORK_DIR}"
 mkdir -p "${STAGE_DIR}/usr/local/opnsense" "${STAGE_DIR}/usr/local/etc" "${META_DIR}" "${OUT_DIR}"
+mkdir -p "${STAGE_DIR}/usr/local/share/licenses/${PKG_NAME}"
+cp "${PROJECT_ROOT}/../LICENSE" "${STAGE_DIR}/usr/local/share/licenses/${PKG_NAME}/LICENSE"
 
-# Stage files exactly like install.sh destinations.
-tar -C "${SRC_DIR}/opnsense" -cf - . | tar -C "${STAGE_DIR}/usr/local/opnsense" -xf -
-tar -C "${SRC_DIR}/etc" -cf - . | tar -C "${STAGE_DIR}/usr/local/etc" -xf -
+# Stage the plugin files under /usr/local.
+tar --exclude '__pycache__' --exclude '*.py[co]' --exclude '.DS_Store' -C "${SRC_DIR}/opnsense" -cf - . | tar -C "${STAGE_DIR}/usr/local/opnsense" -xf -
+tar --exclude '__pycache__' --exclude '*.py[co]' --exclude '.DS_Store' -C "${SRC_DIR}/etc" -cf - . | tar -C "${STAGE_DIR}/usr/local/etc" -xf -
 
 if [ -d "${STAGE_DIR}/usr/local/opnsense/scripts/OPNsense/ocnfixedip" ]; then
     find "${STAGE_DIR}/usr/local/opnsense/scripts/OPNsense/ocnfixedip" -type f -name "*.sh" -exec chmod 0555 {} \;
@@ -62,8 +64,21 @@ Provides tunnel configuration, status, diagnostics, API, and dashboard widget.
 EOD
 categories: [ "net" ]
 scripts: {
+  pre-install: <<EOD
+#!/bin/sh
+for tool in python3 curl xmllint ifconfig route sysctl; do
+  if ! command -v "\$tool" >/dev/null 2>&1; then
+    echo "Missing runtime prerequisite: \$tool" >&2
+    exit 1
+  fi
+done
+python3 -c 'import subprocess, sys; version = subprocess.check_output(["curl", "--version"], text=True).split()[1]; sys.exit(0 if tuple(int(p) for p in version.split(".")[:2]) >= (7, 84) else "curl 7.84+ is required")' || exit 1
+EOD
   post-install: <<EOD
 #!/bin/sh
+# Remove the obsolete plugin-local translation asset on upgrades/reinstalls.
+rm -f /usr/local/opnsense/www/js/ocnfixedip/i18n.js
+rmdir /usr/local/opnsense/www/js/ocnfixedip >/dev/null 2>&1 || true
 service configd restart >/dev/null 2>&1 || true
 rm -rf /tmp/opnsense_*cache* >/dev/null 2>&1 || true
 if ! ifconfig gif0 >/dev/null 2>&1; then

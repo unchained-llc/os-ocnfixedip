@@ -72,26 +72,27 @@
 
 <script>
     $(document).ready(function() {
+        function esc(value) { return $('<span>').text(value == null ? '' : String(value)).html(); }
         function badge(status) {
             if (status === 'ok') {
-                return '<i class="fa fa-check-circle text-success"></i> <span class="label label-success">OK</span>';
+                return '<i class="fa fa-check-circle text-success"></i> <span class="label label-success">' + esc("OK") + '</span>';
             }
             if (status === 'ng') {
-                return '<i class="fa fa-times-circle text-danger"></i> <span class="label label-danger">NG</span>';
+                return '<i class="fa fa-times-circle text-danger"></i> <span class="label label-danger">' + esc("NG") + '</span>';
             }
             if (status === 'not-configured') {
-                return '<i class="fa fa-exclamation-circle text-warning"></i> <span class="label label-warning">NOT CONFIGURED</span>';
+                return '<i class="fa fa-exclamation-circle text-warning"></i> <span class="label label-warning">' + esc("NOT CONFIGURED") + '</span>';
             }
             if (status === 'skipped') {
-                return '<i class="fa fa-minus-circle text-muted"></i> <span class="label label-default">SKIPPED</span>';
+                return '<i class="fa fa-minus-circle text-muted"></i> <span class="label label-default">' + esc("SKIPPED") + '</span>';
             }
-            return '<i class="fa fa-circle text-muted"></i> <span class="label label-default">UNTESTED</span>';
+            return '<i class="fa fa-circle text-muted"></i> <span class="label label-default">' + esc("UNTESTED") + '</span>';
         }
 
         function line(title, detail, status, tail) {
             return '<div class="ocn-check-row">' +
-                   '<div class="ocn-check-title">' + badge(status) + '<strong>' + title + '</strong></div>' +
-                   '<div class="ocn-check-detail">' + detail + (tail || '') + '</div>' +
+                   '<div class="ocn-check-title">' + badge(status) + '<strong>' + esc(title) + '</strong></div>' +
+                   '<div class="ocn-check-detail">' + esc(detail) + esc(tail || '') + '</div>' +
                    '</div>';
         }
 
@@ -176,19 +177,19 @@
 
             if (passed === total) {
                 html = '<div class="ocn-diag-summary ok">' +
-                       '<div class="ocn-diag-summary-title"><i class="fa fa-check-circle text-success"></i> Summary: ' + passed + '/' + total + ' checks passed</div>' +
-                       '<div class="ocn-diag-summary-message">Congratulations! Enjoy your high-speed internet connection!</div>' +
+                       '<div class="ocn-diag-summary-title"><i class="fa fa-check-circle text-success"></i> ' + esc('Summary') + ': ' + passed + '/' + total + ' ' + esc('checks passed') + '</div>' +
+                       '<div class="ocn-diag-summary-message">' + esc("Congratulations! Enjoy your high-speed internet connection!") + '</div>' +
                        '</div>';
             } else {
                 var hintItems = '';
                 for (var j = 0; j < failed.length; j++) {
                     var fkey = failed[j];
-                    hintItems += '<li><strong>' + checkTitle(fkey) + ':</strong> ' + troubleshootingHint(fkey) + '</li>';
+                    hintItems += '<li><strong>' + esc(checkTitle(fkey)) + ':</strong> ' + esc(troubleshootingHint(fkey)) + '</li>';
                 }
 
                 html = '<div class="ocn-diag-summary ng">' +
-                       '<div class="ocn-diag-summary-title"><i class="fa fa-exclamation-triangle text-danger"></i> Summary: ' + passed + '/' + total + ' checks passed</div>' +
-                       '<div class="ocn-diag-summary-message">Some checks are failing. Please review these quick troubleshooting tips:</div>' +
+                       '<div class="ocn-diag-summary-title"><i class="fa fa-exclamation-triangle text-danger"></i> ' + esc('Summary') + ': ' + passed + '/' + total + ' ' + esc('checks passed') + '</div>' +
+                       '<div class="ocn-diag-summary-message">' + esc("Some checks are failing. Please review these quick troubleshooting tips:") + '</div>' +
                        '<ul class="ocn-diag-summary-hints">' + hintItems + '</ul>' +
                        '</div>';
             }
@@ -198,8 +199,8 @@
 
         function renderChecks(data) {
             if (!data || !data.checks) {
-                $('#diag_summary').html('<div class="ocn-diag-summary ng"><div class="ocn-diag-summary-title">Summary: 0/0 checks passed</div><div class="ocn-diag-summary-message">No diagnostics data returned.</div></div>');
-                $('#diag_checks').html('<div class="text-danger">No diagnostics data returned.</div>');
+                $('#diag_summary').html('<div class="ocn-diag-summary ng"><div class="ocn-diag-summary-title">' + esc('Summary') + '</div><div class="ocn-diag-summary-message">' + esc("No diagnostics data returned.") + '</div></div>');
+                $('#diag_checks').html('<div class="text-danger">' + esc("No diagnostics data returned.") + '</div>');
                 return;
             }
 
@@ -214,20 +215,20 @@
             var routeTarget = (checks.default_route && checks.default_route.target) ? checks.default_route.target : '192.0.0.1';
             var routeGw = (checks.default_route && checks.default_route.gateway) ? checks.default_route.gateway : '-';
             var routeIf = (checks.default_route && checks.default_route.interface) ? checks.default_route.interface : '-';
-            html += line('IPv4 default route to tunnel', 'expect: ' + routeTarget + ' via gif0, actual: ' + routeGw + ' via ' + routeIf, checks.default_route ? checks.default_route.status : null, '');
+            html += line('IPv4 default route to tunnel', 'expect' + ': ' + routeTarget + ' ' + 'via' + ' gif0, ' + 'actual' + ': ' + routeGw + ' ' + 'via' + ' ' + routeIf, checks.default_route ? checks.default_route.status : null, '');
 
             var wanAliasIf = (checks.wan_alias && checks.wan_alias.interface) ? checks.wan_alias.interface : '-';
             var wanAliasSrc = (checks.wan_alias && checks.wan_alias.source) ? checks.wan_alias.source : '-';
-            html += line('WAN /128 alias present', 'interface: ' + wanAliasIf + ', source: ' + wanAliasSrc, checks.wan_alias ? checks.wan_alias.status : null, '');
+            html += line('WAN /128 alias present', 'interface' + ': ' + wanAliasIf + ', ' + 'source' + ': ' + wanAliasSrc, checks.wan_alias ? checks.wan_alias.status : null, '');
 
             var mtuExpected = (checks.mtu && checks.mtu.expected) ? checks.mtu.expected : '-';
             var mtuActual = (checks.mtu && checks.mtu.actual) ? checks.mtu.actual : '-';
-            html += line('Tunnel MTU config', 'expected: ' + mtuExpected + ', actual: ' + mtuActual, checks.mtu ? checks.mtu.status : null, '');
+            html += line('Tunnel MTU config', 'expected' + ': ' + mtuExpected + ', ' + 'actual' + ': ' + mtuActual, checks.mtu ? checks.mtu.status : null, '');
 
             var ceSource = (checks.ce_to_br && checks.ce_to_br.source) ? checks.ce_to_br.source : '-';
             var brTarget = (checks.ce_to_br && checks.ce_to_br.target) ? checks.ce_to_br.target : '-';
             var ceBrRtt = (checks.ce_to_br && checks.ce_to_br.rtt_ms && checks.ce_to_br.rtt_ms !== '-') ? (' (' + checks.ce_to_br.rtt_ms + ' ms)') : '';
-            html += line('IPv6 CE-to-BR Ping', 'source: ' + ceSource + ' -> target: ' + brTarget, checks.ce_to_br ? checks.ce_to_br.status : null, ceBrRtt);
+            html += line('IPv6 CE-to-BR Ping', 'source' + ': ' + ceSource + ' -> ' + 'target' + ': ' + brTarget, checks.ce_to_br ? checks.ce_to_br.status : null, ceBrRtt);
 
             var puTarget = (checks.prefix_update && checks.prefix_update.target) ? checks.prefix_update.target : '-';
             var puResult = (checks.prefix_update && checks.prefix_update.result && checks.prefix_update.result !== '-') ? (' -> ' + checks.prefix_update.result) : '';
@@ -236,12 +237,12 @@
             var inetSource = (checks.internet && checks.internet.source) ? checks.internet.source : '-';
             var inetTarget = (checks.internet && checks.internet.target) ? checks.internet.target : '1.1.1.1';
             var inetRtt = (checks.internet && checks.internet.rtt_ms && checks.internet.rtt_ms !== '-') ? (' (' + checks.internet.rtt_ms + ' ms)') : '';
-            html += line('IPv4 internet Ping 1.1.1.1', 'source: ' + inetSource + ' -> target: ' + inetTarget, checks.internet ? checks.internet.status : null, inetRtt);
+            html += line('IPv4 internet Ping 1.1.1.1', 'source' + ': ' + inetSource + ' -> ' + 'target' + ': ' + inetTarget, checks.internet ? checks.internet.status : null, inetRtt);
 
             var ipv6Source = (checks.ipv6_internet && checks.ipv6_internet.source) ? checks.ipv6_internet.source : '-';
             var ipv6Target = (checks.ipv6_internet && checks.ipv6_internet.target) ? checks.ipv6_internet.target : '2606:4700:4700::1111';
             var ipv6Rtt = (checks.ipv6_internet && checks.ipv6_internet.rtt_ms && checks.ipv6_internet.rtt_ms !== '-') ? (' (' + checks.ipv6_internet.rtt_ms + ' ms)') : '';
-            html += line('IPv6 internet Ping 2606:4700:4700::1111', 'source: ' + ipv6Source + ' -> target: ' + ipv6Target, checks.ipv6_internet ? checks.ipv6_internet.status : null, ipv6Rtt);
+            html += line('IPv6 internet Ping 2606:4700:4700::1111', 'source' + ': ' + ipv6Source + ' -> ' + 'target' + ': ' + ipv6Target, checks.ipv6_internet ? checks.ipv6_internet.status : null, ipv6Rtt);
 
             var mtuProbeSource = (checks.mtu_probe && checks.mtu_probe.source) ? checks.mtu_probe.source : '-';
             var mtuProbeTarget = (checks.mtu_probe && checks.mtu_probe.target) ? checks.mtu_probe.target : '1.1.1.1';
@@ -251,7 +252,7 @@
                 mtuProbeIpTotal = String(parseInt(mtuProbePayload, 10) + 28);
             }
             var mtuProbeRtt = (checks.mtu_probe && checks.mtu_probe.rtt_ms && checks.mtu_probe.rtt_ms !== '-') ? (' (' + checks.mtu_probe.rtt_ms + ' ms)') : '';
-            html += line('IPv4 MTU probe (DF Ping)', 'source: ' + mtuProbeSource + ' -> target: ' + mtuProbeTarget + ', payload: ' + mtuProbePayload + ' bytes (IP total: ' + mtuProbeIpTotal + ')', checks.mtu_probe ? checks.mtu_probe.status : null, mtuProbeRtt);
+            html += line('IPv4 MTU probe (DF Ping)', 'source' + ': ' + mtuProbeSource + ' -> ' + 'target' + ': ' + mtuProbeTarget + ', ' + 'payload' + ': ' + mtuProbePayload + ' ' + 'bytes' + ' (' + 'IP total' + ': ' + mtuProbeIpTotal + ')', checks.mtu_probe ? checks.mtu_probe.status : null, mtuProbeRtt);
 
             var mtu6ProbeSource = (checks.mtu6_probe && checks.mtu6_probe.source) ? checks.mtu6_probe.source : '-';
             var mtu6ProbeTarget = (checks.mtu6_probe && checks.mtu6_probe.target) ? checks.mtu6_probe.target : '2606:4700:4700::1111';
@@ -261,7 +262,7 @@
                 mtu6ProbeIpTotal = String(parseInt(mtu6ProbePayload, 10) + 48);
             }
             var mtu6ProbeRtt = (checks.mtu6_probe && checks.mtu6_probe.rtt_ms && checks.mtu6_probe.rtt_ms !== '-') ? (' (' + checks.mtu6_probe.rtt_ms + ' ms)') : '';
-            html += line('IPv6 MTU probe (DF Ping)', 'source: ' + mtu6ProbeSource + ' -> target: ' + mtu6ProbeTarget + ', payload: ' + mtu6ProbePayload + ' bytes (IPv6 total: ' + mtu6ProbeIpTotal + ')', checks.mtu6_probe ? checks.mtu6_probe.status : null, mtu6ProbeRtt);
+            html += line('IPv6 MTU probe (DF Ping)', 'source' + ': ' + mtu6ProbeSource + ' -> ' + 'target' + ': ' + mtu6ProbeTarget + ', ' + 'payload' + ': ' + mtu6ProbePayload + ' ' + 'bytes' + ' (' + 'IPv6 total' + ': ' + mtu6ProbeIpTotal + ')', checks.mtu6_probe ? checks.mtu6_probe.status : null, mtu6ProbeRtt);
 
             var mtuFragSource = (checks.mtu_fragmentation && checks.mtu_fragmentation.source) ? checks.mtu_fragmentation.source : '-';
             var mtuFragTarget = (checks.mtu_fragmentation && checks.mtu_fragmentation.target) ? checks.mtu_fragmentation.target : '1.1.1.1';
@@ -271,7 +272,7 @@
                 mtuFragIpTotal = String(parseInt(mtuFragPayload, 10) + 28);
             }
             var mtuFragRtt = (checks.mtu_fragmentation && checks.mtu_fragmentation.rtt_ms && checks.mtu_fragmentation.rtt_ms !== '-') ? (' (' + checks.mtu_fragmentation.rtt_ms + ' ms)') : '';
-            html += line('IPv4 large packet fragmentation test', 'source: ' + mtuFragSource + ' -> target: ' + mtuFragTarget + ', payload: ' + mtuFragPayload + ' bytes (IP total: ' + mtuFragIpTotal + ', DF: off)', checks.mtu_fragmentation ? checks.mtu_fragmentation.status : null, mtuFragRtt);
+            html += line('IPv4 large packet fragmentation test', 'source' + ': ' + mtuFragSource + ' -> ' + 'target' + ': ' + mtuFragTarget + ', ' + 'payload' + ': ' + mtuFragPayload + ' ' + 'bytes' + ' (' + 'IP total' + ': ' + mtuFragIpTotal + ', DF: off)', checks.mtu_fragmentation ? checks.mtu_fragmentation.status : null, mtuFragRtt);
 
             var mtu6FragSource = (checks.mtu6_fragmentation && checks.mtu6_fragmentation.source) ? checks.mtu6_fragmentation.source : '-';
             var mtu6FragTarget = (checks.mtu6_fragmentation && checks.mtu6_fragmentation.target) ? checks.mtu6_fragmentation.target : '2606:4700:4700::1111';
@@ -281,18 +282,17 @@
                 mtu6FragIpTotal = String(parseInt(mtu6FragPayload, 10) + 48);
             }
             var mtu6FragRtt = (checks.mtu6_fragmentation && checks.mtu6_fragmentation.rtt_ms && checks.mtu6_fragmentation.rtt_ms !== '-') ? (' (' + checks.mtu6_fragmentation.rtt_ms + ' ms)') : '';
-            html += line('IPv6 large packet fragmentation test', 'source: ' + mtu6FragSource + ' -> target: ' + mtu6FragTarget + ', payload: ' + mtu6FragPayload + ' bytes (IPv6 total: ' + mtu6FragIpTotal + ')', checks.mtu6_fragmentation ? checks.mtu6_fragmentation.status : null, mtu6FragRtt);
+            html += line('IPv6 large packet fragmentation test', 'source' + ': ' + mtu6FragSource + ' -> ' + 'target' + ': ' + mtu6FragTarget + ', ' + 'payload' + ': ' + mtu6FragPayload + ' ' + 'bytes' + ' (' + 'IPv6 total' + ': ' + mtu6FragIpTotal + ')', checks.mtu6_fragmentation ? checks.mtu6_fragmentation.status : null, mtu6FragRtt);
 
-            var puTarget = (checks.prefix_update && checks.prefix_update.target) ? checks.prefix_update.target : '-';
             var dnsATarget = (checks.resolve_a && checks.resolve_a.target) ? checks.resolve_a.target : 'one.one.one.one';
             var dnsAAnswer = (checks.resolve_a && checks.resolve_a.answer && checks.resolve_a.answer !== '-') ? (' -> ' + checks.resolve_a.answer) : '';
             html += line('DNS A name resolution', dnsATarget, checks.resolve_a ? checks.resolve_a.status : null, dnsAAnswer);
 
             var curlV4Source = (checks.curl_v4 && checks.curl_v4.source) ? checks.curl_v4.source : '-';
             var curlV4Target = (checks.curl_v4 && checks.curl_v4.target) ? checks.curl_v4.target : 'https://one.one.one.one/';
-            var curlV4RemoteIp = (checks.curl_v4 && checks.curl_v4.remote_ip && checks.curl_v4.remote_ip !== '-') ? (', remote: ' + checks.curl_v4.remote_ip) : '';
+            var curlV4RemoteIp = (checks.curl_v4 && checks.curl_v4.remote_ip && checks.curl_v4.remote_ip !== '-') ? (', ' + 'remote' + ': ' + checks.curl_v4.remote_ip) : '';
             var curlV4Code = (checks.curl_v4 && checks.curl_v4.http_code && checks.curl_v4.http_code !== '-') ? (' (HTTP ' + checks.curl_v4.http_code + curlV4RemoteIp + ')') : '';
-            html += line('IPv4 curl one.one.one.one', 'source: ' + curlV4Source + ' -> target: ' + curlV4Target, checks.curl_v4 ? checks.curl_v4.status : null, curlV4Code);
+            html += line('IPv4 curl one.one.one.one', 'source' + ': ' + curlV4Source + ' -> ' + 'target' + ': ' + curlV4Target, checks.curl_v4 ? checks.curl_v4.status : null, curlV4Code);
 
             var dnsAAAATarget = (checks.resolve_aaaa && checks.resolve_aaaa.target) ? checks.resolve_aaaa.target : 'one.one.one.one';
             var dnsAAAAAnswer = (checks.resolve_aaaa && checks.resolve_aaaa.answer && checks.resolve_aaaa.answer !== '-') ? (' -> ' + checks.resolve_aaaa.answer) : '';
@@ -300,21 +300,20 @@
 
             var curlV6Source = (checks.curl_v6 && checks.curl_v6.source) ? checks.curl_v6.source : '-';
             var curlV6Target = (checks.curl_v6 && checks.curl_v6.target) ? checks.curl_v6.target : 'https://one.one.one.one/';
-            var curlV6RemoteIp = (checks.curl_v6 && checks.curl_v6.remote_ip && checks.curl_v6.remote_ip !== '-') ? (', remote: ' + checks.curl_v6.remote_ip) : '';
+            var curlV6RemoteIp = (checks.curl_v6 && checks.curl_v6.remote_ip && checks.curl_v6.remote_ip !== '-') ? (', ' + 'remote' + ': ' + checks.curl_v6.remote_ip) : '';
             var curlV6Code = (checks.curl_v6 && checks.curl_v6.http_code && checks.curl_v6.http_code !== '-') ? (' (HTTP ' + checks.curl_v6.http_code + curlV6RemoteIp + ')') : '';
-            html += line('IPv6 curl one.one.one.one', 'source: ' + curlV6Source + ' -> target: ' + curlV6Target, checks.curl_v6 ? checks.curl_v6.status : null, curlV6Code);
+            html += line('IPv6 curl one.one.one.one', 'source' + ': ' + curlV6Source + ' -> ' + 'target' + ': ' + curlV6Target, checks.curl_v6 ? checks.curl_v6.status : null, curlV6Code);
 
             $('#diag_checks').html('<div class="ocn-checks">' + html + '</div>');
         }
 
         function runDiagnostics() {
-            $('#diag_summary').html('<div class="text-muted">Checking summary...</div>');
-            $('#diag_checks').html('<div class="text-muted">Checking...</div>');
-            ajaxGet('/api/ocnfixedip/service/diagnostics', {}, function(data) {
+            $('#diag_summary').html('<div class="text-muted">' + esc("Checking summary...") + '</div>');
+            $('#diag_checks').html('<div class="text-muted">' + esc("Checking...") + '</div>');
+            ajaxCall('/api/ocnfixedip/service/diagnostics', {}, function(data) {
                 renderChecks(data);
             });
         }
-
         runDiagnostics();
     });
 </script>

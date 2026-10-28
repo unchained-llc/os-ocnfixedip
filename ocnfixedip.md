@@ -101,9 +101,11 @@ The calculation is implemented with Python's `ipaddress` module:
 4. Shift that integer left by 24 bits.
 5. OR the value into the `/56` network address.
 
-The selected WAN address is the first address reported by `ifconfig` that is neither
-link-local (`fe80::/10`) nor loopback. The current implementation does not distinguish
-stable, temporary, ULA, or multiple global addresses.
+WAN candidates must be global addresses in `2000::/3`, excluding temporary,
+tentative, duplicated, deprecated, detached addresses and the tracked tunnel alias. An empty candidate
+set or multiple `/56` bases causes discovery to fail and retry. The selected stable
+WAN address must share the intended OCN `/56`; separate delegated prefixes are not
+automatically inferred.
 
 ### 2.3 WAN `/128` alias
 
@@ -117,15 +119,18 @@ The last managed address is stored in:
 /var/run/ocnfixedip_local_tunnel_v6
 ```
 
-When the calculated address changes, configure removes the previously tracked alias
-before adding the new one. Only the address recorded in this state file is considered
-plugin-managed.
+State contains `device address owned` (one line). The ownership flag is `1` only
+when the plugin created the alias, or migrated its legacy one-address record on the
+configured WAN. Existing matching aliases are recorded with ownership `0` and are
+preserved on stop. A prefix/device change removes the owned alias from the recorded
+old device. Deletion failure retains the record for retry. Older aliases whose state
+was already lost cannot safely be identified as owned.
 
 ### 2.4 MTU and TCP behavior
 
 - Default tunnel MTU: `1460`
 - Allowed model range: `1280` through `9000`
-- Runtime sets `net.inet.tcp.mss_ifmtu=1`
+- Runtime saves `net.inet.tcp.mss_ifmtu` and sets it to `1`; stop restores the saved value
 - Recommended outbound scrub Max MSS: `1420`
 
 The scrub rule is not created by the plugin and must be configured on the assigned
@@ -152,16 +157,18 @@ Typical responses:
 Request behavior:
 
 - Forces IPv6 transport with `curl -6`
-- Uses `--connect-timeout 2` for the connection phase only; there is no overall
-  transfer timeout, so a stalled response can still hold configure or diagnostics open
-- Uses a temporary mode-`0600` netrc file
+- Uses `--connect-timeout 2`, `--max-time 10`, a 4096-byte response limit and a Python watchdog
+- Uses a temporary mode-`0600` netrc file with quoted credentials and cleanup on
+  completion, timeout and handled signals; curl 7.84+ is required for quoted tokens
 - Appends `hostname=` only when a hostname is configured and the URL does not already
   contain that parameter
 - Accepts URLs that already contain other query parameters
-- Logs the final URL and response body
+- Restricts URLs to HTTP(S), validates/encodes hostname tokens and verifies HTTPS certificates
+- Logs only a recognized result code; URLs, credentials and response bodies are omitted
+- Serializes updates through a separate lock and writes result state atomically
 
-Prefix update failure does not make `configure.sh` exit nonzero, but it is consumed by
-status health logic through `/var/run/ocnfixedip_prefix_update_status`.
+Prefix update failure is returned as `warning=prefix_update`, while the tunnel result
+remains successful. Health reads `/var/run/ocnfixedip_prefix_update_status`.
 
 ---
 
@@ -187,8 +194,8 @@ ocnfixedip_configure_do($verbose = false, $interfaces = null, $family = null)
 ```
 
 If `$family` is supplied and is not `inet6`, the callback logs a skip and returns.
-If the plugin is disabled, it returns without invoking configd. The configd action is
-therefore executed only for relevant IPv6 events while the model is enabled.
+If the plugin is disabled, it returns without invoking configd. An explicitly supplied
+interface list must contain the configured logical WAN. Other IPv6 events are ignored.
 
 ### 4.2 Interface assignment model
 
@@ -239,9 +246,15 @@ Removed from UI:
 - NAT-related options
 - Prefix Update Interval
 
-The main page polls status every five seconds and performs additional status refreshes
-two and five seconds after Apply. The Diagnostics page runs immediately on load
-(without a manual refresh button). All user-visible settings are backed by the MVC model.
+The main page schedules a status request five seconds after the previous response;
+requests do not overlap, and polling pauses during Apply. Apply validation, backend
+failure phase and prefix-update warnings are displayed explicitly. Status health
+failures are shown separately from overall connectivity.
+
+Diagnostics runs immediately on load via POST (normal OPNsense CSRF protection).
+All diagnostic data is JSON serialized and HTML escaped. A plugin-scoped translation
+module uses the authenticated UI language for Japanese settings, help, diagnostics
+and widget text; it does not modify core translation catalogs.
 
 ---
 
@@ -275,9 +288,8 @@ Additional integration files:
    - `execute task : ocnfixedip_configure_do(,[wan],inet6)`
 2. Plugin log includes:
    - `Auto-calculated local tunnel IPv6: ...`
-   - (when prefix changed) `Removed stale WAN /128 alias ...`
-   - `Added WAN /128 alias ...`
-   - `Prefix update response: good ...` or `nochg ...`
+   - (when removing a managed alias) `Removed managed WAN /128 alias on ...`
+   - `Prefix update result: good` or `nochg`
    - `OCN Fixed IP (IPoE) tunnel configuration complete`
 3. Default IPv4 route points to `192.0.0.1`
 
@@ -357,56 +369,47 @@ continues.
 
 ## 11. Configure Lifecycle
 
-`configure.sh` performs the following ordered transaction-like sequence:
+1. Acquire the shared kernel runtime lock, waiting up to 30 seconds.
+2. Load configuration; disabled Apply runs stop without requiring valid update fields.
+3. Check prerequisites and validate update URL, credentials, hostname and tunnel values.
+4. Discover a stable WAN IPv6 with retries and calculate the local address.
+5. Snapshot the previous tunnel, gateway, alias ownership and sysctl state.
+6. Reject a configured `gif0` that does not match the plugin's tracked local address.
+7. For restart, stop only after preflight succeeds.
+8. Replace the managed WAN alias and persist its device/address/ownership.
+9. Create/configure `gif0`, MTU and MSS sysctl; bring it up.
+10. Best-effort assign an enabled `TUNNEL` interface through `write_config()`.
+11. Change the default route, with delete/add fallback, and verify gateway/interface.
+12. Perform a bounded prefix update; return a warning for endpoint/auth failures.
+13. Invalidate status cache and emit structured `result`, `phase`, `warning` JSON.
 
-1. Load configuration values.
-2. Check the three-second duplicate-trigger stamp.
-3. If invoked as `restart`, run teardown first.
-4. If disabled, run teardown and exit successfully.
-5. Validate BR IPv6 and fixed IPv4 presence.
-6. Retry WAN global IPv6 discovery up to six times at one-second intervals.
-7. Calculate the local tunnel IPv6 from the WAN `/56` and fixed IPv4.
-8. Resolve the logical WAN name to its underlying device.
-9. Remove a stale previously managed `/128` alias when necessary.
-10. Add the new local tunnel `/128` alias to WAN.
-11. Validate prefix update URL and authentication user presence.
-12. Create `gif0` if it does not exist.
-13. Configure IPv6 tunnel endpoints.
-14. Configure the IPv4 point-to-point addresses.
-15. Apply MTU, enable TCP MSS-from-interface behavior, and bring `gif0` up.
-16. Best-effort assign `gif0` as an enabled `TUNNEL` interface.
-17. Change or create the IPv4 default route through `192.0.0.1`.
-18. Verify the observed gateway and log a warning if it has not converged.
-19. Perform the immediate OCN prefix update.
-20. Log completion and exit.
-
-This sequence is not rolled back atomically. A failure can leave earlier steps in
-place—for example, a WAN alias may exist even if later tunnel creation fails.
+Network-operation failure returns nonzero and attempts to restore the previous
+network snapshot. A failed recovery is reported as `warning=rollback` and logged.
+This is best-effort: OPNsense interface assignments are retained and rollback
+commands may themselves fail. Keep console access available.
 
 ---
 
 ## 12. Runtime State and Idempotency
 
-Three small state mechanisms are used:
+| Path | Purpose |
+|---|---|
+| `/var/run/ocnfixedip.lock` | Shared configure/restart/stop kernel lock |
+| `/var/run/ocnfixedip_local_tunnel_v6` | Device, IPv6 and ownership flag |
+| `/var/run/ocnfixedip_mss_ifmtu` | Original MSS sysctl value, preserved across restart |
+| `/var/run/ocnfixedip_prefix_update_status` | Timestamp, curl result, recognized response token |
+| `/var/run/ocnfixedip_prefix_update_status.lock` | Serialize live prefix updates |
+| `/var/run/ocnfixedip_status.json` | Status payload cached for up to five seconds |
+| `/var/run/ocnfixedip_status.json.lock` | Serialize cache refreshes across consumers |
 
-| Path | Purpose | Lifetime |
-|---|---|---|
-| `/tmp/ocnfixedip_configure.stamp` | Suppress configure triggers less than three seconds apart | Until reboot or manual cleanup |
-| `/var/run/ocnfixedip_local_tunnel_v6` | Track the plugin-managed WAN `/128` alias | Until teardown/reboot |
-| `/var/run/ocnfixedip_prefix_update_status` | Record latest prefix-update result for status health | Until reboot or next configure/diagnostics run |
+Locks use `fcntl.flock`; lock files are never unlinked while processes may wait on
+them. Kernel ownership is released on process exit, so stale PID files are not used.
+The former three-second debounce stamp is unused. Explicit restart and disabled
+Apply are always processed after acquiring the runtime lock.
 
-The timestamp is a debounce mechanism, not a process lock. Two long-running configure
-processes can overlap if the second starts more than three seconds after the first.
-
-Most network operations are conditionally idempotent:
-
-- Existing `gif0` is reused.
-- Existing matching WAN alias is not added again.
-- Existing `gif0` assignment is reused.
-- Default route uses change-first, then delete/add fallback.
-
-Teardown destroys `gif0` and removes its state file. In the current implementation,
-teardown does not remove the actual WAN `/128` alias before deleting the state file.
+Managed alias deletion happens before discarding ownership state. Status cache is
+invalidated by configure, stop and diagnostics updates. Cached health may otherwise
+be up to five seconds old. JSON state writes in Python use atomic replacement.
 
 ---
 
@@ -416,7 +419,7 @@ teardown does not remove the actual WAN `/128` alias before deleting the state f
 
 | Action | Command | Output type |
 |---|---|---|
-| `ocnfixedip configure` | `configure.sh` | Script |
+| `ocnfixedip configure` | `configure.sh` | Structured JSON (`script_output`, `errors:no`) |
 | `ocnfixedip start` | `configure.sh start` | Script |
 | `ocnfixedip stop` | `teardown.sh` | Script |
 | `ocnfixedip restart` | `configure.sh restart` | Script |
@@ -431,7 +434,7 @@ teardown does not remove the actual WAN `/128` alias before deleting the state f
 | `/api/ocnfixedip/settings/set` | Validate and save settings |
 | `/api/ocnfixedip/service/reconfigure` | Run `ocnfixedip configure` after POST |
 | `/api/ocnfixedip/service/status` | Return parsed status JSON |
-| `/api/ocnfixedip/service/diagnostics` | Return parsed diagnostics JSON |
+| `/api/ocnfixedip/service/diagnostics` | POST only; live update and parsed diagnostics JSON |
 
 The ACL grants access to the UI path and both settings/service API namespaces through
 the `page-ocnfixedip-config` privilege.
@@ -466,7 +469,8 @@ Current status checks include:
 10. `mtu_probe` (IPv4 DF probe at tunnel MTU)
 11. `mtu_fragmentation` (large IPv4 packet probe with DF off)
 
-Dashboard widget and settings-page status rely on this same status JSON.
+Dashboard widget and settings-page status rely on the same cached status JSON.
+FreeBSD ping probes use `-W 2000 -t 3` (milliseconds per reply, seconds overall).
 
 ### 14.2 Diagnostics payload
 
@@ -524,64 +528,63 @@ It intentionally does not remove:
 - Interface assignment entries
 - Gateway definitions
 - Outbound NAT, firewall, or normalization rules
-- Any WAN `/128` alias that remains after teardown
+- Unowned WAN aliases and previously orphaned aliases from old versions
+
+Owned aliases are removed and the saved MSS sysctl is restored on stop. Cleanup
+failures preserve the alias record for retry and require operator attention. The
+package pre-install hook checks runtime commands before installation, and includes
+the project LICENSE under `/usr/local/share/licenses/os-ocnfixedip/`.
 
 ---
 
 ## 16. Failure Behavior
 
-| Failure point | Exit behavior | Possible residual state |
-|---|---|---|
-| Required BR/IPv4 missing | Exit 1 | Existing tunnel untouched unless restart was requested |
-| WAN IPv6 unavailable | Exit 1 after retries | Existing tunnel may remain |
-| IPv6 calculation failure | Exit 1 | Existing tunnel may remain |
-| WAN device missing | Exit 1 | Existing tunnel may remain |
-| WAN alias add fails | Exit 1 | Old alias may already have been removed |
-| Update URL/user missing | Exit 1 | New WAN alias has already been added |
-| `gif0` create fails | Exit 1 | WAN alias remains |
-| Tunnel endpoint/address setup fails | Exit 1 | Partially configured `gif0` may remain |
-| Auto-assignment fails | Continue with warning | Tunnel remains usable but manual assignment is required |
-| Default route operation fails | Continue with warning | Tunnel remains up without expected default route |
-| Prefix update fails | Continue and exit 0 | Tunnel remains up; prefix registration may be stale and status health becomes degraded (`prefix_update`) |
+| Failure | Result |
+|---|---|
+| Runtime lock timeout | Failed backend response; active operation is not interrupted |
+| Invalid settings, missing/ambiguous WAN IPv6 | Fail before network changes/restart teardown |
+| Unmanaged configured `gif0` | Fail with `phase=ownership` |
+| Alias, tunnel, MTU, sysctl or route failure | Fail with phase; attempt network snapshot recovery |
+| Recovery itself fails | Fail with `warning=rollback`; inspect system logs/state |
+| Auto-assignment fails | Continue with logged warning; assign manually |
+| Prefix update fails | Successful tunnel result with `warning=prefix_update`; degraded health |
+| Backend output is missing/invalid | HTTP API returns failed, never success |
 
-Operators should inspect the `ocnfixedip` system log after any failed or ambiguous
-Apply operation. A restart performs teardown first and is the normal recovery path.
+The PHP Apply endpoint checks structured backend output. The configd configure
+action uses `errors:no` to preserve the failure JSON even when the shell exits
+nonzero. The API does not infer success from process invocation alone.
 
 ---
 
 ## 17. Security Considerations
 
-- Credentials reside in `/conf/config.xml` and therefore in OPNsense configuration
-  backups. Protect and encrypt backups appropriately.
-- The Web UI renders the password field as a password input, but the underlying model
-  stores text rather than an external secret reference.
-- Prefix update credentials are written to a randomly named mode-`0600` netrc file so
-  they do not appear directly in process arguments.
-- The netrc file is deleted after `curl`, but there is no signal trap guaranteeing
-  deletion on abrupt termination.
-- `curl -k` disables TLS certificate validation when an HTTPS endpoint is configured.
-- The configured update URL, including hostname token, is written to the system log.
-- Diagnostics expose interface addresses and routes and should be sanitized before
-  sharing publicly.
-- The auto-assignment PHP block writes OPNsense configuration as root through the
-  standard configuration include and `write_config()`.
+Credentials remain in `/conf/config.xml` and backups. Prefix requests pass credentials
+through stdin to the Python helper, then through a temporary quoted netrc file to
+curl. They do not appear in command arguments or update logs. Credential control
+characters are rejected. The netrc is removed on completion, timeout and handled
+signals; SIGKILL cannot guarantee cleanup.
+
+HTTPS uses certificate validation. HTTP remains supported for OCN compatibility and
+has no TLS protection. Only HTTP(S) URLs without embedded authentication/fragments
+are accepted; hostname tokens are validated and query parameters encoded. No update
+URL, hostname token or arbitrary response body is logged or exposed by Diagnostics.
+
+Diagnostics requires POST and standard OPNsense CSRF protection because it sends a
+live update. JSON uses a real serializer; dynamic UI values are text or escaped at
+HTML sinks. Interface/routing details remain sensitive operational information.
 
 ---
 
 ## 18. Known Limitations
 
-1. Only `gif0` is supported; multiple OCN tunnels cannot coexist.
-2. Peer IPv4 is fixed at `192.0.0.1`.
-3. The algorithm is anchored to a `/56` base and is not configurable.
-4. WAN address discovery selects the first eligible IPv6 address.
-5. The plugin changes the global IPv4 default route directly.
-6. Prefix update still does not fail the configure transaction (it is reflected in health state instead).
-7. Configure debounce is not mutual exclusion.
-8. Configure has no transactional rollback.
-9. Teardown forgets, but does not remove, its WAN `/128` alias.
-10. Status health depends on specific probe endpoints (BR, `1.1.1.1`, `2606:4700:4700::1111`, and DNS `one.one.one.one`).
-11. Distribution is package-based (`.pkg`) but not yet integrated into the official OPNsense plugins repository feed.
-12. There is no automated unit or integration test suite.
+1. One dedicated `gif0` and fixed peer `192.0.0.1`; no multi-tunnel support.
+2. Address derivation requires the intended OCN `/56` to match the stable WAN address.
+3. The plugin changes the system IPv4 default route directly; gateway/NAT/firewall/MSS rules remain administrator-managed.
+4. Recovery is best-effort, and OPNsense assignment changes are retained after failure.
+5. Previously orphaned aliases without ownership state require manual inspection.
+6. Health depends on fixed external probes and does not prove a complete Internet outage.
+7. Distribution is package-based, outside the official OPNsense plugins repository feed.
+8. Automated tests use mocks; FreeBSD/OPNsense VM and real OCN integration tests remain required.
 
 ---
 
@@ -598,8 +601,17 @@ for file in os-ocnfixedip/tools/build-pkg.sh \
 done
 ```
 
-Also validate XML and PHP with tools available in the target OPNsense development
-environment.
+Run the portable checks and regression suite from the plugin directory:
+
+```sh
+make check
+```
+
+Python 3, Node.js 20.11+ and `xmllint` are needed. PHP lint runs if PHP CLI is
+available; CI runs `python3 os-ocnfixedip/tools/check.py --require-php` and fails
+if PHP is absent. Tests cover kernel locking, lifecycle/rollback, alias ownership,
+WAN changes, update authentication, safe JSON/HTML, UI localization, status caching
+and package staging. The package test mocks `pkg`, so it is not a FreeBSD build.
 
 ### 19.2 Local package build on OPNsense
 
@@ -648,7 +660,7 @@ At minimum, exercise these paths on a disposable OPNsense VM or lab router:
 2. Disabled Apply behavior.
 3. First enable with valid settings.
 4. Existing and newly created `gif0` assignment paths.
-5. Repeated Apply within and outside the debounce window.
+5. Concurrent/repeated Apply, explicit restart and disabled Apply while another operation holds the lock.
 6. Service restart and stop/start.
 7. WAN IPv6 prefix renewal with alias replacement.
 8. Invalid BR, IPv4, update URL, hostname, and credentials.

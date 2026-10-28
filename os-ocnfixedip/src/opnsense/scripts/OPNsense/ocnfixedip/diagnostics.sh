@@ -127,7 +127,7 @@ if tunnel_exists; then
     tunnel_ipv4=$(printf '%s' "${ifdata}" | awk '/inet / {print $2; exit}')
     mtu_actual=$(printf '%s' "${ifdata}" | sed -n 's/.*mtu \([0-9]*\).*/\1/p' | head -1)
 
-    if printf '%s' "${ifdata}" | grep -q "UP" && printf '%s' "${ifdata}" | grep -q "RUNNING"; then
+    if printf '%s' "${ifdata}" | grep -q "UP" && printf '%s' "${ifdata}" | grep -Eq "RUNNING|LOWER_UP"; then
         tunnel_state_status="ok"
         tunnel_state_detail="${TUNNEL_IF} is UP/RUNNING"
     else
@@ -150,7 +150,8 @@ if tunnel_exists; then
     br_target="${FIXEDIP_AFTR:-${remote_v6}}"
     ce_source="${local_v6}"
     if [ -z "${ce_source}" ] && [ -f /var/run/ocnfixedip_local_tunnel_v6 ]; then
-        ce_source=$(cat /var/run/ocnfixedip_local_tunnel_v6 2>/dev/null)
+        read_alias_state
+        ce_source="${ALIAS_V6}"
     fi
 
     # WAN /128 alias presence check
@@ -168,7 +169,7 @@ if tunnel_exists; then
     if [ -n "${tunnel_ipv4}" ]; then
         inet_source="${tunnel_ipv4}"
 
-        inet_ping_out=$(ping -c 1 -W 2 -S "${tunnel_ipv4}" "${inet_target}" 2>&1)
+        inet_ping_out=$(ping -c 1 -W 2000 -t 3 -S "${tunnel_ipv4}" "${inet_target}" 2>&1)
         if [ $? -eq 0 ]; then
             inet_status="ok"
             inet_rtt=$(printf '%s' "${inet_ping_out}" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' | head -1)
@@ -200,7 +201,7 @@ if tunnel_exists; then
         if [ -n "${mtu_actual}" ] && [ "${mtu_actual}" -ge 1280 ] 2>/dev/null; then
             mtu_probe_payload=$(( mtu_actual - 28 ))
             if [ "${mtu_probe_payload}" -gt 0 ] 2>/dev/null; then
-                mtu_probe_out=$(ping -D -c 1 -W 2 -S "${tunnel_ipv4}" -s "${mtu_probe_payload}" "${mtu_probe_target}" 2>&1)
+                mtu_probe_out=$(ping -D -c 1 -W 2000 -t 3 -S "${tunnel_ipv4}" -s "${mtu_probe_payload}" "${mtu_probe_target}" 2>&1)
                 if [ $? -eq 0 ]; then
                     mtu_probe_status="ok"
                     mtu_probe_rtt=$(printf '%s' "${mtu_probe_out}" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' | head -1)
@@ -214,7 +215,7 @@ if tunnel_exists; then
 
             mtu_frag_payload=$(( mtu_actual + 100 - 28 ))
             if [ "${mtu_frag_payload}" -gt 0 ] 2>/dev/null; then
-                mtu_frag_out=$(ping -c 1 -W 2 -S "${tunnel_ipv4}" -s "${mtu_frag_payload}" "${mtu_frag_target}" 2>&1)
+                mtu_frag_out=$(ping -c 1 -W 2000 -t 3 -S "${tunnel_ipv4}" -s "${mtu_frag_payload}" "${mtu_frag_target}" 2>&1)
                 if [ $? -eq 0 ]; then
                     mtu_frag_status="ok"
                     mtu_frag_rtt=$(printf '%s' "${mtu_frag_out}" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' | head -1)
@@ -238,7 +239,7 @@ if tunnel_exists; then
 
     # CE -> BR check
     if [ -n "${ce_source}" ] && [ -n "${br_target}" ]; then
-        ce_br_ping_out=$(ping -6 -c 1 -W 2 -S "${ce_source}" "${br_target}" 2>&1)
+        ce_br_ping_out=$(ping -6 -c 1 -W 2000 -t 3 -S "${ce_source}" "${br_target}" 2>&1)
         if [ $? -eq 0 ]; then
             ce_to_br_status="ok"
             ce_to_br_rtt=$(printf '%s' "${ce_br_ping_out}" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' | head -1)
@@ -259,7 +260,7 @@ if tunnel_exists; then
         mtu6_probe_source="${ce_source}"
         mtu6_frag_source="${ce_source}"
 
-        ipv6_ping_out=$(ping -6 -c 1 -W 2 -S "${ce_source}" "${ipv6_target}" 2>&1)
+        ipv6_ping_out=$(ping -6 -c 1 -W 2000 -t 3 -S "${ce_source}" "${ipv6_target}" 2>&1)
         if [ $? -eq 0 ]; then
             ipv6_status="ok"
             ipv6_rtt=$(printf '%s' "${ipv6_ping_out}" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' | head -1)
@@ -271,7 +272,7 @@ if tunnel_exists; then
         if [ -n "${mtu_actual}" ] && [ "${mtu_actual}" -ge 1280 ] 2>/dev/null; then
             mtu6_probe_payload=$(( mtu_actual - 48 ))
             if [ "${mtu6_probe_payload}" -gt 0 ] 2>/dev/null; then
-                mtu6_probe_out=$(ping -6 -D -c 1 -W 2 -S "${ce_source}" -s "${mtu6_probe_payload}" "${mtu6_probe_target}" 2>&1)
+                mtu6_probe_out=$(ping -6 -D -c 1 -W 2000 -t 3 -S "${ce_source}" -s "${mtu6_probe_payload}" "${mtu6_probe_target}" 2>&1)
                 if [ $? -eq 0 ]; then
                     mtu6_probe_status="ok"
                     mtu6_probe_rtt=$(printf '%s' "${mtu6_probe_out}" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' | head -1)
@@ -285,7 +286,7 @@ if tunnel_exists; then
 
             mtu6_frag_payload=$(( mtu_actual + 100 - 48 ))
             if [ "${mtu6_frag_payload}" -gt 0 ] 2>/dev/null; then
-                mtu6_frag_out=$(ping -6 -c 1 -W 2 -S "${ce_source}" -s "${mtu6_frag_payload}" "${mtu6_frag_target}" 2>&1)
+                mtu6_frag_out=$(ping -6 -c 1 -W 2000 -t 3 -S "${ce_source}" -s "${mtu6_frag_payload}" "${mtu6_frag_target}" 2>&1)
                 if [ $? -eq 0 ]; then
                     mtu6_frag_status="ok"
                     mtu6_frag_rtt=$(printf '%s' "${mtu6_frag_out}" | sed -n 's/.*time=\([0-9.]*\).*/\1/p' | head -1)
@@ -357,51 +358,16 @@ fi
 
 
 
-# Prefix update API check (live call)
+# Live update is serialized separately from other diagnostics callers.
 if [ -n "${FIXEDIP_UPDATE_URL}" ] && [ -n "${FIXEDIP_AUTH_USER}" ]; then
-    prefix_update_target="${FIXEDIP_UPDATE_URL}"
-    if [ -n "${FIXEDIP_UPDATE_HOSTNAME}" ] && ! printf '%s' "${prefix_update_target}" | grep -q 'hostname='; then
-        case "${prefix_update_target}" in
-            *\?*) prefix_update_target="${prefix_update_target}&hostname=${FIXEDIP_UPDATE_HOSTNAME}" ;;
-            *) prefix_update_target="${prefix_update_target}?hostname=${FIXEDIP_UPDATE_HOSTNAME}" ;;
-        esac
-    fi
-
-    NETRC=$(mktemp /tmp/ocnfixedip-diag-netrc.XXXXXX)
-    chmod 600 "${NETRC}"
-    printf "default\nlogin %s\npassword %s\n" "${FIXEDIP_AUTH_USER}" "${FIXEDIP_AUTH_PASS}" > "${NETRC}"
-    prefix_update_out=$(curl -6 -sk --connect-timeout 2 --netrc-file "${NETRC}" "${prefix_update_target}" 2>&1)
-    curl_rc=$?
-    rm -f "${NETRC}"
-
-    if [ ${curl_rc} -eq 0 ]; then
-        prefix_update_result=$(printf '%s' "${prefix_update_out}" | awk '{print $1; exit}')
-        case "${prefix_update_result}" in
-            good|nochg) prefix_update_status="ok" ;;
-            nohost|badauth|notfqdn|abuse) prefix_update_status="ng" ;;
-            *)
-                if [ -n "${prefix_update_result}" ]; then
-                    prefix_update_status="ng"
-                else
-                    prefix_update_status="ng"
-                    prefix_update_result="-"
-                fi
-                ;;
-        esac
-    else
-        prefix_update_status="ng"
-        prefix_update_result="curl-error"
-    fi
-
-    # keep status.sh and widget health in sync with latest diagnostics result
-    if [ "${prefix_update_status}" = "ok" ]; then
-        printf '%s %s %s\n' "$(date +%s)" "0" "${prefix_update_result}" > /var/run/ocnfixedip_prefix_update_status
-    else
-        printf '%s %s %s\n' "$(date +%s)" "1" "${prefix_update_result}" > /var/run/ocnfixedip_prefix_update_status
-    fi
+    prefix_update_target="Configured OCN update endpoint"
+    update_json=$(run_prefix_update)
+    prefix_update_status=$(printf '%s' "${update_json}" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status", "ng"))')
+    prefix_update_result=$(printf '%s' "${update_json}" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("result", "update-error"))')
+    invalidate_status
 else
     prefix_update_status="not-configured"
 fi
 
-printf '{"checks":{"tunnel_state":{"status":"%s","detail":"%s"},"default_route":{"target":"%s","gateway":"%s","interface":"%s","status":"%s"},"wan_alias":{"interface":"%s","source":"%s","status":"%s"},"ce_to_br":{"source":"%s","target":"%s","status":"%s","rtt_ms":"%s"},"prefix_update":{"target":"%s","status":"%s","result":"%s"},"internet":{"source":"%s","target":"%s","status":"%s","rtt_ms":"%s"},"ipv6_internet":{"source":"%s","target":"%s","status":"%s","rtt_ms":"%s"},"resolve_a":{"target":"%s","status":"%s","answer":"%s"},"resolve_aaaa":{"target":"%s","status":"%s","answer":"%s"},"mtu":{"expected":"%s","actual":"%s","status":"%s"},"mtu_probe":{"source":"%s","target":"%s","payload":"%s","status":"%s","rtt_ms":"%s"},"mtu_fragmentation":{"source":"%s","target":"%s","payload":"%s","status":"%s","rtt_ms":"%s"},"mtu6_probe":{"source":"%s","target":"%s","payload":"%s","status":"%s","rtt_ms":"%s"},"mtu6_fragmentation":{"source":"%s","target":"%s","payload":"%s","status":"%s","rtt_ms":"%s"},"curl_v4":{"source":"%s","target":"%s","status":"%s","http_code":"%s","remote_ip":"%s","ssl_verify_result":"%s"},"curl_v6":{"source":"%s","target":"%s","status":"%s","http_code":"%s","remote_ip":"%s","ssl_verify_result":"%s"}}}' \
+render_json '{"checks":{"tunnel_state":{"status":"%s","detail":"%s"},"default_route":{"target":"%s","gateway":"%s","interface":"%s","status":"%s"},"wan_alias":{"interface":"%s","source":"%s","status":"%s"},"ce_to_br":{"source":"%s","target":"%s","status":"%s","rtt_ms":"%s"},"prefix_update":{"target":"%s","status":"%s","result":"%s"},"internet":{"source":"%s","target":"%s","status":"%s","rtt_ms":"%s"},"ipv6_internet":{"source":"%s","target":"%s","status":"%s","rtt_ms":"%s"},"resolve_a":{"target":"%s","status":"%s","answer":"%s"},"resolve_aaaa":{"target":"%s","status":"%s","answer":"%s"},"mtu":{"expected":"%s","actual":"%s","status":"%s"},"mtu_probe":{"source":"%s","target":"%s","payload":"%s","status":"%s","rtt_ms":"%s"},"mtu_fragmentation":{"source":"%s","target":"%s","payload":"%s","status":"%s","rtt_ms":"%s"},"mtu6_probe":{"source":"%s","target":"%s","payload":"%s","status":"%s","rtt_ms":"%s"},"mtu6_fragmentation":{"source":"%s","target":"%s","payload":"%s","status":"%s","rtt_ms":"%s"},"curl_v4":{"source":"%s","target":"%s","status":"%s","http_code":"%s","remote_ip":"%s","ssl_verify_result":"%s"},"curl_v6":{"source":"%s","target":"%s","status":"%s","http_code":"%s","remote_ip":"%s","ssl_verify_result":"%s"}}}' \
     "${tunnel_state_status}" "${tunnel_state_detail}" "${route_target}" "${route_gateway}" "${route_iface}" "${route_status}" "${wan_alias_if}" "${ce_source}" "${wan_alias_status}" "${ce_source}" "${br_target}" "${ce_to_br_status}" "${ce_to_br_rtt}" "${prefix_update_target}" "${prefix_update_status}" "${prefix_update_result}" "${inet_source}" "${inet_target}" "${inet_status}" "${inet_rtt}" "${ipv6_source}" "${ipv6_target}" "${ipv6_status}" "${ipv6_rtt}" "${resolve_name}" "${resolve_a_status}" "${resolve_a_answer}" "${resolve_name}" "${resolve_aaaa_status}" "${resolve_aaaa_answer}" "${mtu_expected}" "${mtu_actual}" "${mtu_status}" "${inet_source}" "${mtu_probe_target}" "${mtu_probe_payload}" "${mtu_probe_status}" "${mtu_probe_rtt}" "${inet_source}" "${mtu_frag_target}" "${mtu_frag_payload}" "${mtu_frag_status}" "${mtu_frag_rtt}" "${mtu6_probe_source}" "${mtu6_probe_target}" "${mtu6_probe_payload}" "${mtu6_probe_status}" "${mtu6_probe_rtt}" "${mtu6_frag_source}" "${mtu6_frag_target}" "${mtu6_frag_payload}" "${mtu6_frag_status}" "${mtu6_frag_rtt}" "${curl_v4_source}" "${curl_target}" "${curl_v4_status}" "${curl_v4_http_code}" "${curl_v4_remote_ip}" "${curl_v4_ssl_verify_result}" "${curl_v6_source}" "${curl_target}" "${curl_v6_status}" "${curl_v6_http_code}" "${curl_v6_remote_ip}" "${curl_v6_ssl_verify_result}"

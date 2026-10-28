@@ -12,7 +12,7 @@
         });
 
         function setStatus(statusText, iconClass, badgeClass) {
-            $('#tunnel_status').html('<span class="label ' + badgeClass + '">' + statusText + '</span>');
+            $('#tunnel_status').empty().append($('<span>').addClass('label ' + badgeClass).text(statusText));
             $('#status_icon').attr('class', 'fa ' + iconClass);
         }
 
@@ -26,27 +26,50 @@
             $('#tunnel_reason').text('').parent().hide();
         }
 
-        $("#saveAct").SimpleActionButton({
-            onPreAction: function() {
-                const dfObj = new $.Deferred();
-                showApplying();
-                saveFormToEndpoint("/api/ocnfixedip/settings/set", 'frm_general_settings', function(){
-                    dfObj.resolve();
-                });
-                return dfObj;
-            },
-            onAction: function() {
-                ajaxCall("/api/ocnfixedip/service/reconfigure", {}, function() {
-                    updateServiceControlUI('ocnfixedip');
-                    setTimeout(refreshStatus, 2000);
-                    setTimeout(refreshStatus, 5000);
-                });
+        let applying = false;
+        let statusPending = false;
+        let statusTimer;
+        function showApplyError(message) {
+            $('#apply_result').removeClass('hidden alert-warning').addClass('alert-danger').text(message);
+        }
+        $('#saveAct').on('click', function() {
+            if (applying) return;
+            applying = true;
+            clearTimeout(statusTimer);
+            $(this).prop('disabled', true);
+            $('#apply_result').addClass('hidden');
+            showApplying();
+            function completeApply() {
+                applying = false;
+                $('#saveAct').prop('disabled', false);
+                refreshStatus();
             }
+            saveFormToEndpoint('/api/ocnfixedip/settings/set', 'frm_general_settings', function() {
+                ajaxCall('/api/ocnfixedip/service/reconfigure', {}, function(data, status) {
+                    if (status !== 'success' || !data || data.result !== 'ok') {
+                        showApplyError('Apply failed. Check the system log.');
+                        if (data && data.phase) $('#apply_result').append(document.createTextNode(' ' + 'Failed phase' + ': ' + data.phase));
+                    } else if (data.warning) {
+                        $('#apply_result').removeClass('hidden alert-danger').addClass('alert-warning').text('Prefix update failed; review Diagnostics.');
+                    }
+                    completeApply();
+                });
+            }, false, function() {
+                showApplyError('Apply failed. Check the system log.');
+                completeApply();
+            });
         });
 
         function refreshStatus() {
-            ajaxGet('/api/ocnfixedip/service/status', {}, function(data) {
-                if (!data || !data.tunnel) {
+            clearTimeout(statusTimer);
+            if (statusPending || applying) return;
+            statusPending = true;
+            ajaxGet('/api/ocnfixedip/service/status', {}, function(data, status) {
+                statusPending = false;
+                statusTimer = setTimeout(refreshStatus, 5000);
+                if (applying) return;
+                if (status !== 'success' || !data || !data.tunnel) {
+                    setStatus('Status request failed.', 'fa-exclamation-circle text-warning', 'label-warning');
                     return;
                 }
 
@@ -65,15 +88,11 @@
                     setStatus('Not Running', 'fa-circle text-danger', 'label-danger');
                 }
 
-                if (t.health === 'healthy') {
-                    $('#tunnel_connectivity').html('<span class="text-success">HEALTHY</span>');
-                } else if (t.connectivity === 'connected') {
-                    $('#tunnel_connectivity').html('<span class="text-warning">Connected (degraded)</span>');
-                } else if (t.connectivity === 'no internet') {
-                    $('#tunnel_connectivity').html('<span class="text-warning">No Internet</span>');
-                } else {
-                    $('#tunnel_connectivity').html('<span class="text-muted">' + (t.connectivity || '-') + '</span>');
-                }
+                const connectivity = t.health === 'healthy' ? 'HEALTHY' :
+                    (t.connectivity === 'connected' ? 'Connected (degraded)' :
+                    (t.connectivity === 'no internet' ? 'No Internet' : t.connectivity || '-'));
+                $('#tunnel_connectivity').text(connectivity);
+                $('#tunnel_failures').text(t.health_failures ? 'Health failures' + ': ' + t.health_failures + '. ' + 'Probe failures are not proof of a total outage.' : '');
 
                 $('#tunnel_local_v6').text(t.local_v6 || '-');
                 $('#tunnel_aftr').text(t.aftr || '-');
@@ -90,7 +109,6 @@
         }
 
         refreshStatus();
-        setInterval(refreshStatus, 5000);
         updateServiceControlUI('ocnfixedip');
     });
 </script>
@@ -108,7 +126,7 @@
                 </tr>
                 <tr>
                     <td><strong>{{ lang._('Connectivity') }}</strong></td>
-                    <td><span id="tunnel_connectivity">-</span></td>
+                    <td><span id="tunnel_connectivity">-</span><div id="tunnel_failures" class="text-warning"></div></td>
                 </tr>
                 <tr>
                     <td><strong>{{ lang._('Local IPv6') }}</strong></td>
@@ -139,11 +157,11 @@
     {{ partial("layout_partials/base_form",['fields':generalForm,'id':'frm_general_settings'])}}
     <div class="col-md-12">
         <hr />
+        <div id="apply_result" class="alert hidden" role="alert"></div>
         <button class="btn btn-primary" id="saveAct"
                 data-endpoint='/api/ocnfixedip/service/reconfigure'
                 data-label="{{ lang._('Apply') }}"
                 data-error-title="{{ lang._('Error reconfiguring tunnel') }}"
-                type="button">
-        </button>
+                type="button">{{ lang._('Apply') }}</button>
     </div>
 </div>
