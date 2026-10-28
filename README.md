@@ -32,12 +32,18 @@ It is focused on OCN fixed IP operation only.
 - [Post-install Required Setup](#post-install-required-setup-important)
 - [GUI Settings](#gui-settings-interfaces--ocn-fixed-ip-ipoe)
 - [Runtime Behavior](#runtime-behavior)
+- [LAN IPv6 Prefix Tracking](#lan-ipv6-prefix-tracking-recommendation-opnsense-261)
+- [Log Checks](#log-checks)
 - [Verification](#verification)
 - [Troubleshooting](#troubleshooting)
+- [Performance](#performance)
+- [Package Build](#build-a-pkg-on-opnsense)
 - [Upgrade](#upgrade)
 - [Uninstall](#uninstall)
 - [Known Limitations](#known-limitations)
+- [Security Notes](#security-notes)
 - [Development Notes](#development-notes)
+- [License](#license)
 
 ---
 
@@ -140,7 +146,8 @@ the tunnel peer.
 
 ## Installation
 
-Install from GitHub Releases:
+Install from GitHub Releases (the command below is the documented `v2026.07.22`
+example; select the intended version from [Releases](https://github.com/unchained-llc/os-ocnfixedip/releases)):
 
 ```sh
 pkg add -f https://github.com/unchained-llc/os-ocnfixedip/releases/download/v2026.07.22/os-ocnfixedip-2026.07.22.1155.pkg
@@ -288,7 +295,11 @@ Example:
 - WAN IPv6 renewal event (`newwanip(..., inet6)` path via `rc.newwanipv6`)
 
 Repeated configure events within three seconds are ignored to reduce duplicate work
-during configuration-save and WAN-renewal races.
+during configuration-save and WAN-renewal races. This check also precedes explicit
+restart and disabled-state handling, so those requests can be skipped as well. It is
+not a process lock. Prefix update requests have a two-second connection timeout but
+no overall transfer timeout. The Apply API currently returns `ok` without checking
+the backend result; confirm the runtime status and logs after applying.
 
 ### Routing
 
@@ -300,6 +311,12 @@ during configuration-save and WAN-renewal races.
 Disabling the service destroys `gif0`. The IPv4 default route is removed only when it
 currently uses `gif0`. OPNsense may then restore another configured gateway according
 to its own gateway management state.
+
+Current teardown deletes the alias tracking file without removing the actual WAN
+`/128` alias. Restart runs teardown first and can therefore lose the previous address
+needed for cleanup. Changing the selected WAN also does not clean the old device.
+Configure sets the global `net.inet.tcp.mss_ifmtu=1` sysctl and does not restore its
+previous value on stop.
 
 ### Connectivity and health checks (status/diagnostics)
 
@@ -573,19 +590,23 @@ pkg delete -y os-ocnfixedip
 Package uninstall hooks stop the service (`configctl ocnfixedip stop`) and refresh
 runtime caches. It deliberately leaves plugin configuration in `/conf/config.xml`, and
 it does not remove gateway, outbound NAT, normalization, firewall, or interface-assignment
-configuration created outside the plugin. Review and remove those entries manually when
-they are no longer needed.
+configuration created outside the plugin. The WAN `/128` alias and modified sysctl
+may also remain. Review and remove unneeded state manually with an alternative IPv4
+route available.
 
 ## Known Limitations
 
 - OCN Fixed IP (IPoE) only; this is not a generic DS-Lite or MAP-E implementation.
 - One hard-coded tunnel interface, `gif0`, and one fixed peer IPv4, `192.0.0.1`.
+  An existing `gif0` used by another service will be reused and reconfigured.
 - The local tunnel address calculation intentionally assumes an OCN `/56` base.
 - Applying the service directly changes the system IPv4 default route.
 - Gateway, outbound NAT, firewall, and MSS normalization are not created automatically.
 - WAN IPv6 selection uses the first non-link-local IPv6 found on the selected device.
 - Prefix update failure does not fail the configure transaction; it is reflected through status/diagnostics health state instead.
 - Distribution is package-based (`.pkg` via GitHub Releases/local build), not yet an official OPNsense plugins repository feed.
+- Configure has no process lock or transactional rollback; teardown leaves the WAN alias.
+- Some GUI strings are hard-coded in English; Japanese UI localization is incomplete.
 - Automated tests and an OPNsense VM integration-test workflow are not included yet.
 
 ## Security Notes
@@ -597,6 +618,9 @@ they are no longer needed.
 - The current request uses `curl -k`, which disables TLS certificate verification for
   HTTPS update URLs. Use only the endpoint provided by OCN and restrict administrative
   access to the router.
+- HTTP update URLs do not encrypt authentication traffic with TLS. The temporary
+  netrc file has no signal cleanup trap, and update URLs/hostname tokens are logged.
+- Opening Diagnostics performs a live prefix update and records its result.
 - Diagnostic output contains interface addresses and routing information; sanitize it
   before posting publicly.
 
