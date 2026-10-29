@@ -2,7 +2,7 @@
 
 [English](./README.md) | [日本語](./README_ja.md)
 
-**OCN 固定IP（IPoE）**専用の OPNsense プラグインです。IPv4 over IPv6（IPIP）トンネルを `gif0` に構成し、固定IPv4の経路とプレフィックス更新を管理します。
+<strong>OCN 固定IP（IPoE）</strong>専用の OPNsense プラグインです。IPv4 over IPv6（IPIP）トンネルを `gif0` に構成し、固定IPv4の経路とプレフィックス更新を管理します。
 
 > [!IMPORTANT]
 > 本プラグインはコミュニティによる実装であり、NTTドコモビジネスや OPNsense の公式製品ではありません。
